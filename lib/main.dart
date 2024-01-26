@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:vehiloc/splash.view.dart';
+import 'package:vehiloc/core/utils/splash.view.dart';
 
 void main() {
   runApp(const App());

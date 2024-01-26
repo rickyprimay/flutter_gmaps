@@ -9,6 +9,7 @@ class Vehicle {
   int? vehicleId;
   int? type;
   int? baseMcc;
+  int? bearing;
 
 
 
@@ -23,6 +24,7 @@ class Vehicle {
     required this.vehicleId,
     this.type,
     this.baseMcc,
+    this.bearing
   });
 
   Vehicle.fromJson(Map<String, dynamic> json){
@@ -36,5 +38,6 @@ class Vehicle {
     vehicleId = json['vehicle_id'];
     type = json['type'];
     baseMcc = json ['base_mcc'];
+    bearing = json['bearing'];
   }
 }

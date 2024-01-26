@@ -3,6 +3,9 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:logger/logger.dart';
 import 'package:vehiloc/core/model/response_vehicles.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final apiServiceProvider = Provider<ApiService>((ref) => ApiService());
 
 class ApiService {
   final String baseUrl = "https://vehiloc.net/rest/";
