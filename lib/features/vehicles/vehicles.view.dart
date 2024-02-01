@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:google_fonts/google_fonts.dart'; // Import package google_fonts
 import 'package:vehiloc/core/model/response_vehicles.dart';
 import 'package:vehiloc/core/utils/conts.dart';
 import 'package:vehiloc/features/home/home.view.dart';
 import 'package:vehiloc/features/vehicles/api/api_provider.dart';
+import 'package:vehiloc/features/vehicles/pages/debugging.dart';
 import 'package:vehiloc/features/vehicles/pages/details.page.dart';
 
 class VehicleView extends StatefulWidget {
@@ -54,27 +57,32 @@ class _VehicleViewState extends State<VehicleView> {
         return nameLower.contains(searchLower) ||
             plateNoLower.contains(searchLower);
       }).toList();
-      _groupVehicles(_filteredVehicles); // Regroup filtered vehicles
+      _groupVehicles(_filteredVehicles);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        title: TextField(
-          onChanged: _filterVehicles,
-          style: TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            hintText: 'Search...',
-            hintStyle: TextStyle(color: Colors.white),
-            border: InputBorder.none,
-          ),
-        ),
-        backgroundColor: GlobalColor.mainColor,
+    return MaterialApp(
+      theme: ThemeData(
+        textTheme: GoogleFonts.poppinsTextTheme(),
       ),
-      body: _buildBody(),
+      home: Scaffold(
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          title: TextField(
+            onChanged: _filterVehicles,
+            style: TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: 'Search...',
+              hintStyle: TextStyle(color: Colors.white),
+              border: InputBorder.none,
+            ),
+          ),
+          backgroundColor: GlobalColor.mainColor,
+        ),
+        body: _buildBody(),
+      ),
     );
   }
 
@@ -138,7 +146,11 @@ class _VehicleViewState extends State<VehicleView> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => DetailsPageView(),
+                              builder: (context) => DetailsPageView(
+                                vehicleId: vehicle.vehicleId!,
+                                vehicleLat: vehicle.lat!,
+                                vehicleLon: vehicle.lon!,
+                              ),
                             ),
                           );
                         },
@@ -205,9 +217,7 @@ class _VehicleViewState extends State<VehicleView> {
                                     ],
                                   ),
                                 ),
-                                onTap: () {
-                                  // Handle onTap event
-                                },
+                                onTap: () {},
                               ),
                             ),
                             if (gpsdtWIB != null)
@@ -259,7 +269,5 @@ class _VehicleViewState extends State<VehicleView> {
 }
 
 void main() {
-  runApp(MaterialApp(
-    home: VehicleView(),
-  ));
+  runApp(VehicleView());
 }

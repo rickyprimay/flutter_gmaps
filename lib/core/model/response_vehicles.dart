@@ -12,7 +12,6 @@ class Vehicle {
   int? bearing;
 
 
-
   Vehicle({
     required this.customerName,
     required this.name,

@@ -80,6 +80,7 @@ class _HomeViewState extends State<HomeView> {
 }
 
 class MapScreen extends StatefulWidget {
+  
   @override
   _MapScreenState createState() => _MapScreenState();
 }
@@ -150,7 +151,10 @@ class _MapScreenState extends State<MapScreen> {
                       position: LatLng(vehicle.lat!, vehicle.lon!),
                       icon:
                           vehicle.speed == 0 ? redMarkerIcon : greenMarkerIcon,
-                      infoWindow: InfoWindow(title: ("${vehicle.name}")),
+                      infoWindow: InfoWindow(
+                        title: ("${vehicle.name}"),
+                        snippet: ("${vehicle.name}"),
+                      ),
                       rotation: vehicle.bearing?.toDouble() ?? 0.0,
                     )),
               ),

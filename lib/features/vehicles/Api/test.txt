@@ -1,0 +1,8 @@
+daily.map((daily) => Marker(
+                      markerId: MarkerId('1'),
+                      position: LatLng(daily.latitude!, daily.longitude!),
+                      icon:
+                          daily.speed == 0 ? redMarkerIcon : greenMarkerIcon,
+                      rotation: daily.bearing?.toDouble() ?? 0.0,
+                    )),
+              ),

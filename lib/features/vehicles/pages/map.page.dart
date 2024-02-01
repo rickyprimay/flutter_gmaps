@@ -1,21 +1,26 @@
-import 'package:flutter/material.dart';
-
-class MapPageView extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Welcome to Flutter',
-      home: Scaffold(
-        appBar: AppBar(
-          title: Text('Welcome to Flutter'),
-        ),
-        body: Center(
-          child: Text(
-              'Hello World',
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)
-          ),
-        ),
-      ),
-    );
-  }
-}
+// SizedBox(
+//               height: 200,
+//               child: Center(
+//                   child: Chart(
+//                 data: [
+//                   {'genre': 'Sports', 'sold': 275},
+//                   {'genre': 'Strategy', 'sold': 115},
+//                   {'genre': 'Action', 'sold': 120},
+//                   {'genre': 'Shooter', 'sold': 350},
+//                   {'genre': 'Other', 'sold': 150},
+//                 ],
+//                 variables: {
+//                   'genre': Variable(
+//                     accessor: (Map map) => map['genre'] as String,
+//                   ),
+//                   'sold': Variable(
+//                     accessor: (Map map) => map['sold'] as num,
+//                   ),
+//                 },
+//                 marks: [IntervalMark()],
+//                 axes: [
+//                   Defaults.horizontalAxis,
+//                   Defaults.verticalAxis,
+//                 ],
+//               )),
+//             ),
