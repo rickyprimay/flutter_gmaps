@@ -90,7 +90,7 @@ class ApiService {
           logger.e("Response does not contain 'data' key.");
           return [];
         }
-      } else {
+      } else {  
         logger.e("API request failed with status code: ${response.statusCode}");
         return [];
       }

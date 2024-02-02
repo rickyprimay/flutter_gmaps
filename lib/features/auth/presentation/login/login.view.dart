@@ -15,11 +15,29 @@ class _LoginViewState extends State<LoginView> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-  bool isLoading = false; 
+  bool isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkTokenAndRedirect();
+  }
+
+  Future<void> _checkTokenAndRedirect() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? token = prefs.getString('token');
+
+    if (token != null && token.isNotEmpty) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HomeView()),
+      );
+    }
+  }
 
   Future<void> _login() async {
     setState(() {
-      isLoading = true; 
+      isLoading = true;
     });
 
     final String username = _usernameController.text.trim();
@@ -46,8 +64,6 @@ class _LoginViewState extends State<LoginView> {
         prefs.setString('username', username);
         prefs.setString('password', password);
 
-        await Future.delayed(Duration(seconds: 2));
-
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => HomeView()),
@@ -65,7 +81,7 @@ class _LoginViewState extends State<LoginView> {
       print('Error: $error');
     } finally {
       setState(() {
-        isLoading = false; 
+        isLoading = false;
       });
     }
   }
@@ -138,8 +154,7 @@ class _LoginViewState extends State<LoginView> {
                   child: ElevatedButton(
                     onPressed: isLoading ? null : _login,
                     style: ButtonStyle(
-                      minimumSize:
-                          MaterialStateProperty.all(Size(400, 50)),
+                      minimumSize: MaterialStateProperty.all(Size(400, 50)),
                       backgroundColor:
                           MaterialStateProperty.all(GlobalColor.mainColor),
                       shape: MaterialStateProperty.all(

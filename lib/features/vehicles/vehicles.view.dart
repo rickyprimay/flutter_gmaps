@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:google_fonts/google_fonts.dart'; // Import package google_fonts
+import 'package:google_fonts/google_fonts.dart';
 import 'package:vehiloc/core/model/response_vehicles.dart';
 import 'package:vehiloc/core/utils/conts.dart';
 import 'package:vehiloc/features/home/home.view.dart';
 import 'package:vehiloc/features/vehicles/api/api_provider.dart';
-import 'package:vehiloc/features/vehicles/pages/debugging.dart';
 import 'package:vehiloc/features/vehicles/pages/details.page.dart';
 
 class VehicleView extends StatefulWidget {
@@ -19,6 +17,8 @@ class _VehicleViewState extends State<VehicleView> {
   late List<Vehicle> _allVehicles;
   late List<Vehicle> _filteredVehicles;
   late Map<String, List<Vehicle>> _groupedVehicles;
+  late ScrollController _scrollController = ScrollController();
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -27,14 +27,25 @@ class _VehicleViewState extends State<VehicleView> {
     _allVehicles = [];
     _groupedVehicles = {};
     _fetchData();
+    _scrollController.addListener(_scrollListener);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchData() async {
+    setState(() {
+      _isLoading = true;
+    });
     final List<Vehicle> vehicles = await ApiProvider().getApiResponse();
     setState(() {
       _allVehicles = vehicles;
       _filteredVehicles = vehicles;
       _groupVehicles(vehicles);
+      _isLoading = false;
     });
   }
 
@@ -59,6 +70,46 @@ class _VehicleViewState extends State<VehicleView> {
       }).toList();
       _groupVehicles(_filteredVehicles);
     });
+  }
+
+  void _scrollListener() {
+    if (_scrollController.offset >=
+            _scrollController.position.maxScrollExtent &&
+        !_scrollController.position.outOfRange) {
+      // Reached the bottom
+      _fetchData();
+    }
+  }
+
+  void _convertAndNavigateToDetailsPage(Vehicle vehicle) {
+    DateTime gpsdtWIB;
+    final DateTime now = DateTime.now();
+    final DateTime gpsdtUtc = DateTime.fromMillisecondsSinceEpoch(
+      vehicle.gpsdt! * 1000,
+      isUtc: true,
+    );
+
+    // Convert gpsdt to WIB time with 00:00:00
+    if (gpsdtUtc.year == now.year &&
+        gpsdtUtc.month == now.month &&
+        gpsdtUtc.day == now.day) {
+      gpsdtWIB = DateTime(now.year, now.month, now.day, 0, 0, 0);
+    } else {
+      gpsdtWIB = DateTime(gpsdtUtc.year, gpsdtUtc.month, gpsdtUtc.day, 0, 0, 0);
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DetailsPageView(
+          vehicleId: vehicle.vehicleId!,
+          vehicleLat: vehicle.lat!,
+          vehicleLon: vehicle.lon!,
+          vehicleName: vehicle.name!,
+          gpsdt: gpsdtWIB.millisecondsSinceEpoch ~/ 1000, // Sent in seconds format
+        ),
+      ),
+    );
   }
 
   @override
@@ -87,12 +138,16 @@ class _VehicleViewState extends State<VehicleView> {
   }
 
   Widget _buildBody() {
-    if (_filteredVehicles.isEmpty) {
+    if (_isLoading && _allVehicles.isEmpty) {
       return Center(child: CircularProgressIndicator());
     } else {
       return ListView.builder(
-        itemCount: _groupedVehicles.length,
+        controller: _scrollController,
+        itemCount: _groupedVehicles.length + (_isLoading ? 1 : 0),
         itemBuilder: (context, index) {
+          if (_isLoading && index == _groupedVehicles.length) {
+            return Center(child: CircularProgressIndicator());
+          }
           String customerName = _groupedVehicles.keys.elementAt(index);
           List<Vehicle> customerVehicles = _groupedVehicles[customerName]!;
 
@@ -128,7 +183,7 @@ class _VehicleViewState extends State<VehicleView> {
                         color: GlobalColor.mainColor,
                         icon: Icons.map_outlined,
                         onTap: () {
-                          Navigator.push(
+                          Navigator.pushReplacement(
                             context,
                             MaterialPageRoute(
                               builder: (context) => HomeView(),
@@ -143,16 +198,7 @@ class _VehicleViewState extends State<VehicleView> {
                         color: GlobalColor.mainColor,
                         icon: Icons.book_online,
                         onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => DetailsPageView(
-                                vehicleId: vehicle.vehicleId!,
-                                vehicleLat: vehicle.lat!,
-                                vehicleLon: vehicle.lon!,
-                              ),
-                            ),
-                          );
+                          _convertAndNavigateToDetailsPage(vehicle);
                         },
                       ),
                     ],
