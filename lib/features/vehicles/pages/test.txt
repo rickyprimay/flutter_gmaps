@@ -6,7 +6,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:intl/intl.dart';
-import 'package:vehiloc/core/model/test.dart';
+import 'package:vehiloc/core/model/response_daily_vehicle.dart';
 import 'package:vehiloc/core/utils/conts.dart';
 import 'package:vehiloc/features/vehicles/api/api_service.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -18,8 +18,7 @@ class DetailsPageView extends StatefulWidget {
   final String? vehicleName;
   final int gpsdt;
 
-  const DetailsPageView({
-    super.key,
+  DetailsPageView({
     required this.vehicleId,
     required this.vehicleLat,
     required this.vehicleLon,
@@ -34,7 +33,8 @@ class DetailsPageView extends StatefulWidget {
 class _DetailsPageViewState extends State<DetailsPageView> {
   final ApiService apiService = ApiService();
 
-  late LatLng _initialCameraPosition;
+  late double _initialLat;
+  late double _initialLon;
 
   late DateTime _selectedDate;
   double _sliderValue = 0.0;
@@ -44,11 +44,7 @@ class _DetailsPageViewState extends State<DetailsPageView> {
   bool _isMarkerIconsSet = false;
   bool _isButtonClicked = false;
 
-  List<Data> allData = [];
-  List<DataItem> dailyData = [];
-  List<InputLogsItem> inputData = [];
-  List<JdetailsItem> detailsItem = [];
-
+  List<Daily> dailyData = [];
   late GoogleMapController _mapController;
 
   int _selectedTabIndex = 0;
@@ -56,8 +52,8 @@ class _DetailsPageViewState extends State<DetailsPageView> {
   @override
   void initState() {
     super.initState();
-    _initialCameraPosition =
-        LatLng(widget.vehicleLat ?? 0.0, widget.vehicleLon ?? 0.0);
+    _initialLat = widget.vehicleLat ?? 0.0;
+    _initialLon = widget.vehicleLon ?? 0.0;
 
     DateTime gpsdtUtc = DateTime.fromMillisecondsSinceEpoch(
       widget.gpsdt * 1000,
@@ -67,20 +63,21 @@ class _DetailsPageViewState extends State<DetailsPageView> {
     _selectedDate = DateTime(gpsdtWIB.year, gpsdtWIB.month, gpsdtWIB.day);
 
     setMarkerIcons();
-    fetchAllData();
+    fetchData();
   }
 
-  void fetchAllData() async {
+  void fetchData() async {
     final int vehicleId = widget.vehicleId;
     final int startEpoch = widget.gpsdt;
 
     try {
-      final Data dataAll =
-          await apiService.fetchDataFromApi(vehicleId, startEpoch);
+      final List<Daily> data = await apiService.fetchDailyHistory(
+        vehicleId,
+        startEpoch,
+      );
 
       setState(() {
-        allData = [dataAll];
-        dailyData = allData.isNotEmpty ? allData[0].data : [];
+        dailyData = data;
       });
     } catch (e) {
       print("error : $e");
@@ -118,7 +115,7 @@ class _DetailsPageViewState extends State<DetailsPageView> {
     }
 
     final List<LatLng> polylineCoordinates = dailyData
-        .map((daily) => LatLng(daily.latitude, daily.longitude))
+        .map((daily) => LatLng(daily.latitude!, daily.longitude!))
         .toList();
 
     final PolylineId polylineId = PolylineId('${widget.vehicleId}');
@@ -140,17 +137,15 @@ class _DetailsPageViewState extends State<DetailsPageView> {
     int index = (sliderValue * dailyData.length / 100).round();
     if (index >= dailyData.length) index = dailyData.length - 1;
 
-    final DataItem currentDaily = dailyData[index];
+    final Daily currentDaily = dailyData[index];
 
     final Set<Marker> markers = {
       Marker(
           markerId: MarkerId("${widget.vehicleId}"),
-          position: LatLng(currentDaily.latitude, currentDaily.longitude),
-          rotation: currentDaily.bearing.toDouble(),
+          position: LatLng(currentDaily.latitude!, currentDaily.longitude!),
+          rotation: currentDaily.bearing?.toDouble() ?? 0.0,
           icon: currentDaily.speed == 0 ? _redMarkerIcon : _greenMarkerIcon,
-          infoWindow: InfoWindow(
-            title: "${widget.vehicleName}",
-          ))
+          infoWindow: InfoWindow(title: ("${widget.vehicleName}"))),
     };
 
     return markers;
@@ -158,11 +153,6 @@ class _DetailsPageViewState extends State<DetailsPageView> {
 
   @override
   Widget build(BuildContext context) {
-    JdetailsItem? jDetails;
-
-    if (allData.isNotEmpty && allData[0].jdetails.length > 1) {
-      jDetails = allData[0].jdetails[1];
-    }
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -190,6 +180,7 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                             _selectedDate.subtract(Duration(days: 1));
                         _updateStartEpoch();
                       });
+                      _moveToMarkerLocation();
                     },
                     icon: Icon(Icons.arrow_back),
                   ),
@@ -220,11 +211,35 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                         _selectedDate = _selectedDate.add(Duration(days: 1));
                         _updateStartEpoch();
                       });
+                      _moveToMarkerLocation();
                     },
                     icon: Icon(Icons.arrow_forward),
                   ),
                 ],
               ),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                Column(
+                  children: [
+                    Icon(Icons.speed),
+                    Text('Speed', style: GoogleFonts.poppins()),
+                  ],
+                ),
+                Column(
+                  children: [
+                    Icon(Icons.directions),
+                    Text('Jarak', style: GoogleFonts.poppins()),
+                  ],
+                ),
+                Column(
+                  children: [
+                    Icon(Icons.punch_clock_outlined),
+                    Text('Waktu', style: GoogleFonts.poppins()),
+                  ],
+                ),
+              ],
             ),
             Row(
               children: [
@@ -312,8 +327,8 @@ class _DetailsPageViewState extends State<DetailsPageView> {
         Expanded(
           child: GoogleMap(
             initialCameraPosition: CameraPosition(
-              target: _initialCameraPosition,
-              zoom: 9,
+              target: LatLng(_initialLat, _initialLon),
+              zoom: 12,
             ),
             markers: _createMarkers(_sliderValue),
             polylines: _createPolylines(),
@@ -358,20 +373,11 @@ class _DetailsPageViewState extends State<DetailsPageView> {
     return Column(
       children: [
         Text('Event'),
-        SizedBox(height: 20),
-        ElevatedButton(
-          onPressed: () {
-            // Panggil fungsi fetchAllData saat tombol ditekan
-            fetchAllData();
-          },
-          child: Text('Test Response'),
-        ),
       ],
     );
   }
 
   Widget _buildChartWidget() {
-    // Generate dummy data for demonstration
     List<int> dummySpeedData = [43, 72, 65, 88, 50, 90, 75, 40, 60, 85];
     List<String> hours = [
       '01:00',
@@ -384,7 +390,7 @@ class _DetailsPageViewState extends State<DetailsPageView> {
       '08:00',
       '09:00',
       '10:00'
-    ]; // Add more hours as needed
+    ];
 
     return Padding(
       padding: EdgeInsets.all(16.0),
@@ -423,17 +429,17 @@ class _DetailsPageViewState extends State<DetailsPageView> {
   }
 
   void _updateCameraPosition(double sliderValue) {
-    if (dailyData.isEmpty) {
+    if (dailyData.isEmpty || _mapController == null) {
       return;
     }
 
     int index = (sliderValue * dailyData.length / 100).round();
     if (index >= dailyData.length) index = dailyData.length - 1;
 
-    final DataItem currentDaily = dailyData[index];
+    final Daily currentDaily = dailyData[index];
     _mapController.animateCamera(
       CameraUpdate.newLatLng(
-        LatLng(currentDaily.latitude, currentDaily.longitude),
+        LatLng(currentDaily.latitude!, currentDaily.longitude!),
       ),
     );
   }
@@ -444,12 +450,13 @@ class _DetailsPageViewState extends State<DetailsPageView> {
     final int startEpoch = selectedDateUtc.millisecondsSinceEpoch ~/ 1000;
 
     try {
-      final Data dataAll =
-          await apiService.fetchDataFromApi(vehicleId, startEpoch);
+      final List<Daily> data = await apiService.fetchDailyHistory(
+        vehicleId,
+        startEpoch,
+      );
 
       setState(() {
-        allData = [dataAll];
-        dailyData = allData.isNotEmpty ? allData[0].data : [];
+        dailyData = data;
       });
     } catch (e) {
       print("error : $e");
@@ -475,13 +482,26 @@ class _DetailsPageViewState extends State<DetailsPageView> {
         setState(() {
           _selectedDate = picked;
         });
-        _updateStartEpoch();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
               "Anda tidak dapat memilih tanggal yang cocok dengan tanggal data."),
         ));
       }
+    }
+  }
+
+  void _moveToMarkerLocation() {
+    if (dailyData.isNotEmpty && _mapController != null) {
+      int index = (_sliderValue * dailyData.length / 100).round();
+      if (index >= dailyData.length) index = dailyData.length - 1;
+
+      final Daily currentDaily = dailyData[index];
+      _mapController.animateCamera(
+        CameraUpdate.newLatLng(
+          LatLng(currentDaily.latitude!, currentDaily.longitude!),
+        ),
+      );
     }
   }
 }

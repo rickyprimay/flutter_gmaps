@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:logger/logger.dart';
 import 'package:vehiloc/core/model/response_daily_vehicle.dart';
+import 'package:vehiloc/core/model/test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:vehiloc/core/model/response_vehicles.dart';
 
@@ -90,7 +91,7 @@ class ApiService {
           logger.e("Response does not contain 'data' key.");
           return [];
         }
-      } else {  
+      } else {
         logger.e("API request failed with status code: ${response.statusCode}");
         return [];
       }
@@ -100,4 +101,37 @@ class ApiService {
     }
   }
 
+  Future<Data> fetchDataFromApi(int vehicleId, int startEpoch) async {
+    final String apiUrl =
+        "$baseUrl/vehicle_daily_history/$vehicleId/$startEpoch";
+
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+
+      final String username = prefs.getString('username') ?? "";
+      final String password = prefs.getString('password') ?? "";
+
+      if (username.isEmpty || password.isEmpty) {
+        logger.e("Username or password not found");
+      }
+
+      final String basicAuth =
+          'Basic ' + base64Encode(utf8.encode('$username:$password'));
+
+      final response = await http.get(
+        Uri.parse(apiUrl),
+        headers: {'Authorization': basicAuth},
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> jsonResponse = json.decode(response.body);
+        logger.i("Hasil response: $jsonResponse");
+        return Data.fromJson(jsonResponse);
+      } else {
+        throw Exception('Failed to load data from API');
+      }
+    } catch (e) {
+      throw Exception('Error during API request: $e');
+    }
+  }
 }

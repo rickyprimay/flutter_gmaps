@@ -76,7 +76,6 @@ class _VehicleViewState extends State<VehicleView> {
     if (_scrollController.offset >=
             _scrollController.position.maxScrollExtent &&
         !_scrollController.position.outOfRange) {
-      // Reached the bottom
       _fetchData();
     }
   }
@@ -106,7 +105,8 @@ class _VehicleViewState extends State<VehicleView> {
           vehicleLat: vehicle.lat!,
           vehicleLon: vehicle.lon!,
           vehicleName: vehicle.name!,
-          gpsdt: gpsdtWIB.millisecondsSinceEpoch ~/ 1000, // Sent in seconds format
+          gpsdt:
+              gpsdtWIB.millisecondsSinceEpoch ~/ 1000, // Sent in seconds format
         ),
       ),
     );

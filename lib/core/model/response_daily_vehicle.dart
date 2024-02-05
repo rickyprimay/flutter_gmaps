@@ -1,15 +1,3 @@
-class DailyData {
-  final List<Daily> dailyList;
-  final List<Jdetails> jDetailsList;
-  final List<Inputlogs> inputLogsList;
-
-  DailyData({
-    required this.dailyList,
-    required this.jDetailsList,
-    required this.inputLogsList,
-  });
-}
-
 class Daily {
   int? bearing;
   int? gpsdt;
@@ -41,32 +29,30 @@ class Daily {
 }
 
 class Jdetails {
-  int? distance;
+  double? distance;
   int? startdt;
   int? enddt;
   int? type;
-  int? gfid;
   double? lat;
   double? lon;
 
   Jdetails({
     required this.distance,
     required this.startdt,
-    required this.type,
     required this.enddt,
-    required this.gfid,
+    required this.type,
     required this.lat,
     required this.lon,
   });
 
   Jdetails.fromJson(Map<String, dynamic> json) {
-    distance = json['distance'];
-    enddt = json['enddt'];
+    distance =
+        json['distance']?.toDouble();
     startdt = json['startdt'];
+    enddt = json['enddt'];
     type = json['type'];
-    gfid = json['gfid'];
-    lat = json['lat'];
-    lon = json['lon'];
+    lat = json['lat']?.toDouble();
+    lon = json['lon']?.toDouble();
   }
 }
 
@@ -92,7 +78,7 @@ class Inputlogs {
     dt = json['dt'];
     inputNo = json['input_no'];
     newState = json['new_state'];
-    newStateBgcolor = json['new_state_bgcolor']; 
+    newStateBgcolor = json['new_state_bgcolor'];
     newStateDesc = json['new_state_desc'];
     sensorName = json['sensor_name'];
     vehicleId = json['vehicle_id'];

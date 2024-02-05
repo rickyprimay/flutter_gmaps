@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:google_fonts/google_fonts.dart';
+import 'package:google_fonts/google_fonts.dart'; // Import google_fonts package
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:vehiloc/core/model/response_vehicles.dart';
@@ -42,11 +42,13 @@ class _HomeViewState extends State<HomeView> {
         unselectedFontSize: 12,
         fixedColor: Colors.white,
         showSelectedLabels: true,
-        selectedLabelStyle: GoogleFonts.workSans(
+        selectedLabelStyle: GoogleFonts.poppins(
+          // Gunakan GoogleFonts.poppins()
           color: Colors.white,
           fontWeight: FontWeight.bold,
         ),
-        unselectedLabelStyle: GoogleFonts.workSans(color: Colors.white),
+        unselectedLabelStyle: GoogleFonts.poppins(
+            color: Colors.white), // Gunakan GoogleFonts.poppins()
         showUnselectedLabels: false,
         backgroundColor: GlobalColor.mainColor,
         items: <BottomNavigationBarItem>[
@@ -96,25 +98,23 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void setMarkerIcons() async {
-    greenMarkerIcon = await CustomMarkerGenerator.createCustomMarkerIcon(
-      iconPath: 'assets/icons/arrow_green.png',
-      label: 'Green Marker',
-      fontSize: 16, // Ubah ukuran teks di sini
-      iconWidth: 40,
-      iconHeight: 40,
-      labelWidth: 80,
-      labelHeight: 20,
-    );
+    final Uint8List greenMarkerIconData =
+        await getBytesFromAsset('assets/icons/arrow_green.png', 40);
+    final Uint8List redMarkerIconData =
+        await getBytesFromAsset('assets/icons/arrow_red.png', 40);
 
-    redMarkerIcon = await CustomMarkerGenerator.createCustomMarkerIcon(
-      iconPath: 'assets/icons/arrow_red.png',
-      label: 'Red Marker',
-      fontSize: 16, // Ubah ukuran teks di sini
-      iconWidth: 40,
-      iconHeight: 40,
-      labelWidth: 80,
-      labelHeight: 20,
-    );
+    greenMarkerIcon = BitmapDescriptor.fromBytes(greenMarkerIconData);
+    redMarkerIcon = BitmapDescriptor.fromBytes(redMarkerIconData);
+  }
+
+  Future<Uint8List> getBytesFromAsset(String path, int width) async {
+    ByteData data = await rootBundle.load(path);
+    ui.Codec codec = await ui.instantiateImageCodec(data.buffer.asUint8List(),
+        targetWidth: width);
+    ui.FrameInfo fi = await codec.getNextFrame();
+    return (await fi.image.toByteData(format: ui.ImageByteFormat.png))!
+        .buffer
+        .asUint8List();
   }
 
   @override
@@ -123,7 +123,8 @@ class _MapScreenState extends State<MapScreen> {
       appBar: AppBar(
         title: Text(
           'Map',
-          style: TextStyle(
+          style: GoogleFonts.poppins(
+            // Gunakan GoogleFonts.poppins()
             color: GlobalColor.textColor,
           ),
         ),
@@ -147,82 +148,23 @@ class _MapScreenState extends State<MapScreen> {
                 zoom: 11.0,
               ),
               markers: Set<Marker>.from(
-                vehicles.map(
-                  (vehicle) => Marker(
-                    markerId: MarkerId('${vehicle.vehicleId}'),
-                    position: LatLng(vehicle.lat!, vehicle.lon!),
-                    icon: vehicle.speed == 0 ? redMarkerIcon : greenMarkerIcon,
-                    infoWindow: InfoWindow(
-                      title: ("${vehicle.name}"),
-                      snippet: ("${vehicle.name}"),
-                    ),
-                    rotation: vehicle.bearing?.toDouble() ?? 0.0,
-                  ),
-                ),
+                vehicles.map((vehicle) => Marker(
+                      markerId: MarkerId('${vehicle.vehicleId}'),
+                      position: LatLng(vehicle.lat!, vehicle.lon!),
+                      icon:
+                          vehicle.speed == 0 ? redMarkerIcon : greenMarkerIcon,
+                      infoWindow: InfoWindow(
+                        title: ("${vehicle.name}"),
+                        snippet: ("${vehicle.name}"),
+                      ),
+                      rotation: vehicle.bearing?.toDouble() ?? 0.0,
+                    )),
               ),
             );
           }
         },
       ),
     );
-  }
-}
-
-class CustomMarkerGenerator {
-  static Future<BitmapDescriptor> createCustomMarkerIcon({
-    required String iconPath,
-    required String label,
-    required double fontSize,
-    required double iconWidth,
-    required double iconHeight,
-    required double labelWidth,
-    required double labelHeight,
-  }) async {
-    final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
-    final Canvas canvas = Canvas(pictureRecorder);
-
-    final double totalWidth = iconWidth > labelWidth ? iconWidth : labelWidth;
-    final double totalHeight = iconHeight + labelHeight;
-
-    // Load icon image
-    final ByteData data = await rootBundle.load(iconPath);
-    final ui.Codec codec = await ui.instantiateImageCodec(
-      data.buffer.asUint8List(),
-      targetWidth: iconWidth.toInt(),
-      targetHeight: iconHeight.toInt(),
-    );
-    final ui.FrameInfo frameInfo = await codec.getNextFrame();
-    final ui.Image iconImage = frameInfo.image;
-    final Rect iconRect = Offset.zero & Size(iconWidth, iconHeight);
-    canvas.drawImage(iconImage, Offset.zero, Paint());
-
-    // Draw label text
-    final TextPainter textPainter = TextPainter(
-      text: TextSpan(
-        text: label,
-        style: TextStyle(fontSize: fontSize, color: Colors.black),
-      ),
-      textDirection: TextDirection.ltr,
-      textAlign: TextAlign.center,
-    );
-    textPainter.layout(minWidth: 0, maxWidth: totalWidth);
-    textPainter.paint(
-      canvas,
-      Offset((totalWidth - textPainter.width) / 2, iconHeight),
-    );
-
-    // Convert canvas to image
-    final ui.Picture picture = pictureRecorder.endRecording();
-    final ui.Image markerAsImage = await picture.toImage(
-      totalWidth.toInt(),
-      totalHeight.toInt(),
-    );
-    final ByteData? byteData = await markerAsImage.toByteData(
-      format: ui.ImageByteFormat.png,
-    );
-    final Uint8List markerAsBytes = byteData!.buffer.asUint8List();
-
-    return BitmapDescriptor.fromBytes(markerAsBytes);
   }
 }
 
