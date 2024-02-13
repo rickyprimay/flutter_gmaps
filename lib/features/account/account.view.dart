@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart'; // Import the google_fonts package
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:vehiloc/core/utils/conts.dart';
-import 'package:vehiloc/features/account/widget/button.logout.dart';
-import 'package:vehiloc/features/auth/presentation/login/login.view.dart';
+import 'package:VehiLoc/core/utils/conts.dart';
+import 'package:VehiLoc/features/account/widget/button.logout.dart';
+import 'package:VehiLoc/features/auth/presentation/login/login.view.dart';
 
 class AccountView extends StatelessWidget {
   const AccountView({Key? key});
@@ -14,7 +15,8 @@ class AccountView extends StatelessWidget {
         automaticallyImplyLeading: false,
         title: Text(
           'Profile',
-          style: TextStyle(
+          style: GoogleFonts.poppins(
+            // Use GoogleFonts.poppins for Poppins font
             color: GlobalColor.textColor,
           ),
         ),
@@ -42,47 +44,49 @@ class AccountView extends StatelessWidget {
                   SizedBox(height: 10.0),
                   Text(
                     username,
-                    style: TextStyle(
+                    style: GoogleFonts.poppins(
+                      // Use GoogleFonts.poppins for Poppins font
                       fontSize: 20.0,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 20.0),
                   ButtonLogout(
-              onPressed: () async {
-                showDialog(
-                  context: context,
-                  builder: (BuildContext context) {
-                    return AlertDialog(
-                      title: Text('Konfirmasi Logout'),
-                      content: Text('Apakah Anda yakin ingin logout?'),
-                      actions: [
-                        TextButton(
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                          },
-                          child: Text('Batal'),
-                        ),
-                        TextButton(
-                          onPressed: () async {
-                            SharedPreferences prefs = await SharedPreferences.getInstance();
-                            prefs.remove('token');
-
-                            Navigator.of(context).pop();
-                            Navigator.of(context).pushReplacement(
-                              MaterialPageRoute(
-                                builder: (context) => LoginView(),
+                    onPressed: () async {
+                      showDialog(
+                        context: context,
+                        builder: (BuildContext context) {
+                          return AlertDialog(
+                            title: Text('Konfirmasi Logout'),
+                            content: Text('Apakah Anda yakin ingin logout?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                },
+                                child: Text('Batal'),
                               ),
-                            );
-                          },
-                          child: Text('Logout'),
-                        ),
-                      ],
-                    );
-                  },
-                );
-              },
-            ),
+                              TextButton(
+                                onPressed: () async {
+                                  SharedPreferences prefs =
+                                      await SharedPreferences.getInstance();
+                                  prefs.remove('token');
+
+                                  Navigator.of(context).pop();
+                                  Navigator.of(context).pushReplacement(
+                                    MaterialPageRoute(
+                                      builder: (context) => LoginView(),
+                                    ),
+                                  );
+                                },
+                                child: Text('Logout'),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  ),
                 ],
               );
             }

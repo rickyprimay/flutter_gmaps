@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:vehiloc/core/utils/conts.dart';
-import 'package:vehiloc/features/auth/presentation/widget/form.login.dart';
-import 'package:vehiloc/features/home/home.view.dart';
+import 'package:google_fonts/google_fonts.dart'; // Import Google Fonts package
+import 'package:VehiLoc/core/utils/conts.dart';
+import 'package:VehiLoc/features/auth/presentation/widget/form.login.dart';
+import 'package:VehiLoc/features/home/home.view.dart';
 
 class LoginView extends StatefulWidget {
   @override
@@ -103,8 +104,9 @@ class _LoginViewState extends State<LoginView> {
                 Container(
                   alignment: Alignment.center,
                   child: Text(
-                    'Vehiloc',
-                    style: TextStyle(
+                    'VehiLoc',
+                    style: GoogleFonts.poppins(
+                      // Apply Google Fonts
                       color: GlobalColor.mainColor,
                       fontSize: 35,
                       fontWeight: FontWeight.bold,
@@ -116,17 +118,16 @@ class _LoginViewState extends State<LoginView> {
                 ),
                 Text(
                   'Login ke akun anda',
-                  style: TextStyle(
+                  style: GoogleFonts.poppins(
+                    // Apply Google Fonts
                     color: GlobalColor.mainColor,
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
                 const SizedBox(
-                  height: 15,
+                  height: 30,
                 ),
-
-                /// username Input
                 TextFormLogin(
                   controller: _usernameController,
                   text: 'Username',
@@ -152,9 +153,12 @@ class _LoginViewState extends State<LoginView> {
 
                 Center(
                   child: ElevatedButton(
-                    onPressed: isLoading ? null : _login,
+                    onPressed: isLoading ? null : _login, // Tombol login
                     style: ButtonStyle(
-                      minimumSize: MaterialStateProperty.all(Size(400, 50)),
+                      minimumSize: MaterialStateProperty.all(Size(
+                        MediaQuery.of(context).size.width * 1.0,
+                        50,
+                      )),
                       backgroundColor:
                           MaterialStateProperty.all(GlobalColor.mainColor),
                       shape: MaterialStateProperty.all(
@@ -168,13 +172,43 @@ class _LoginViewState extends State<LoginView> {
                         ? CircularProgressIndicator(
                             color: Colors.white,
                           )
-                        : const Text(
+                        : Text(
                             'Login',
-                            style: TextStyle(
+                            style: GoogleFonts.poppins(
+                              // Apply Google Fonts
                               color: Colors.white,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
+                  ),
+                ),
+                const SizedBox(
+                  height: 30,
+                ),
+                Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment
+                        .center, // Menengahkan elemen di dalam Column
+                    children: [
+                      Text(
+                        'Versi: 0.1.0', // Label versi
+                        style: GoogleFonts.poppins(
+                          // Apply Google Fonts
+                          color: GlobalColor.mainColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        'vehiloc.net', // Versi aplikasi
+                        style: GoogleFonts.poppins(
+                          // Apply Google Fonts
+                          color: GlobalColor.mainColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

@@ -1,10 +1,10 @@
-name: vehiloc
-description: "A new Flutter project."
-publish_to: 'none'
+name: VehiLoc
+description: "Cara mudah tracking kemana saja armada Anda pergi."
+publish_to: "none"
 version: 0.1.0
 
 environment:
-  sdk: '>=3.2.5 <4.0.0'
+  sdk: ">=3.2.5 <4.0.0"
 
 dependencies:
   flutter:
@@ -27,20 +27,18 @@ dependencies:
   infinite_scroll_pagination: ^4.0.0
   label_google_maps_marker: ^0.0.3
   flutter_native_splash: ^2.3.2
-  fl_chart: ^0.35.0
+  syncfusion_flutter_charts: ^24.2.3+1
+  pdf: ^3.10.7
+  image_gallery_saver: ^2.0.3
 
 flutter_native_splash:
   android: true
   ios: true
   color: "#7D0A0A"
-  image: assets/logo/vehiloc-logo-splash.png
+  image: assets/logo/vehiloc-logo.png
   android_12:
     color: "#7D0A0A"
-    image: assets/logo/vehiloc-logo-splash.png
-    
-
-
-
+    image: assets/logo/vehiloc-logo.png
 
 dev_dependencies:
   flutter_test:
@@ -52,11 +50,11 @@ flutter:
   uses-material-design: true
 
   assets:
-  - assets/logo/vehiloc-logo-splash.png # asset logo to launch splash 
-  - assets/icons/
-  - assets/icons/navigate.png
-  - assets/icons/navigate-red.png
-  - assets/icons/navigate-green.png
-  - assets/icons/arrow_green.png
-  - assets/icons/arrow_red.png
-  - assets/icons/arrow_gray.png
+    - assets/logo/vehiloc-logo.png
+    - assets/icons/
+    - assets/icons/navigate.png
+    - assets/icons/navigate-red.png
+    - assets/icons/navigate-green.png
+    - assets/icons/arrow_green.png
+    - assets/icons/arrow_red.png
+    - assets/icons/arrow_gray.png
