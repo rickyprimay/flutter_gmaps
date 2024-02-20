@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart'; // Import the google_fonts package
+import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:VehiLoc/core/utils/conts.dart';
-import 'package:VehiLoc/features/account/widget/button.logout.dart';
-import 'package:VehiLoc/features/auth/presentation/login/login.view.dart';
+import 'package:VehiLoc/core/utils/colors.dart';
+import 'package:VehiLoc/features/account/widget/button_logout.dart';
+import 'package:VehiLoc/features/auth/login/login_view.dart';
 
 class AccountView extends StatelessWidget {
   const AccountView({Key? key});
@@ -16,7 +16,6 @@ class AccountView extends StatelessWidget {
         title: Text(
           'Profile',
           style: GoogleFonts.poppins(
-            // Use GoogleFonts.poppins for Poppins font
             color: GlobalColor.textColor,
           ),
         ),
@@ -45,12 +44,39 @@ class AccountView extends StatelessWidget {
                   Text(
                     username,
                     style: GoogleFonts.poppins(
-                      // Use GoogleFonts.poppins for Poppins font
                       fontSize: 20.0,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 20.0),
+                  ElevatedButton(
+                    onPressed: () {
+                      ();
+                    },
+                    style: ButtonStyle(
+                      minimumSize: MaterialStateProperty.all(Size(
+                        MediaQuery.of(context).size.width * 0.3,
+                        50,
+                      )),
+                      backgroundColor:
+                          MaterialStateProperty.all(GlobalColor.mainColor),
+                      shape: MaterialStateProperty.all(
+                        RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      elevation: MaterialStateProperty.all(10),
+                    ),
+                    child: Text(
+                      'Ubah Password',
+                      style: GoogleFonts.poppins(
+                        textStyle: TextStyle(
+                          color: GlobalColor.textColor,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10.0),
                   ButtonLogout(
                     onPressed: () async {
                       showDialog(
@@ -71,6 +97,8 @@ class AccountView extends StatelessWidget {
                                   SharedPreferences prefs =
                                       await SharedPreferences.getInstance();
                                   prefs.remove('token');
+                                  prefs.remove(
+                                      'username'); // Hapus username saat logout
 
                                   Navigator.of(context).pop();
                                   Navigator.of(context).pushReplacement(

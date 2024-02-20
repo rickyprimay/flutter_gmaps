@@ -7,9 +7,9 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:intl/intl.dart';
 import 'package:VehiLoc/core/model/response_daily.dart';
-import 'package:VehiLoc/core/utils/conts.dart';
+import 'package:VehiLoc/core/utils/colors.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
-import 'package:VehiLoc/features/vehicles/api/api_service.dart';
+import 'package:VehiLoc/core/Api/api_service.dart';
 import 'package:image_gallery_saver/image_gallery_saver.dart';
 
 class DetailsPageView extends StatefulWidget {
@@ -17,7 +17,8 @@ class DetailsPageView extends StatefulWidget {
   final double? vehicleLat;
   final double? vehicleLon;
   final String? vehicleName;
-  int gpsdt;
+  late int gpsdt;
+  late int initialGpsdt;
 
   DetailsPageView({
     Key? key,
@@ -26,7 +27,9 @@ class DetailsPageView extends StatefulWidget {
     required this.vehicleLon,
     required this.vehicleName,
     required this.gpsdt,
-  }) : super(key: key);
+  }) : super(key: key) {
+    initialGpsdt = gpsdt;
+  }
 
   @override
   _DetailsPageViewState createState() => _DetailsPageViewState();
@@ -42,11 +45,12 @@ class _DetailsPageViewState extends State<DetailsPageView> {
   final _cartesianChartKey = GlobalKey<SfCartesianChartState>();
 
   late DateTime _selectedDate;
-  double _sliderValue = 0.0;
+  double _sliderValue = 100.0;
 
   late BitmapDescriptor _greenMarkerIcon;
   late BitmapDescriptor _redMarkerIcon;
   late BitmapDescriptor _greyMarkerIcon;
+  late BitmapDescriptor _arrowIcon;
 
   bool _isButtonClicked = false;
 
@@ -59,6 +63,10 @@ class _DetailsPageViewState extends State<DetailsPageView> {
 
   int _selectedTabIndex = 0;
 
+  bool exportingImage = false;
+
+  bool _isLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -69,11 +77,23 @@ class _DetailsPageViewState extends State<DetailsPageView> {
       widget.gpsdt * 1000,
       isUtc: true,
     );
-    DateTime gpsdtWIB = gpsdtUtc.add(Duration(hours: 7));
+    DateTime gpsdtWIB = gpsdtUtc.add(const Duration(hours: 7));
     _selectedDate = DateTime(gpsdtWIB.year, gpsdtWIB.month, gpsdtWIB.day);
 
     setMarkerIcons();
     fetchAllData();
+    fetchGeocode();
+  }
+
+  void fetchGeocode() async {
+    final double lat = -6.966667;
+    final double lon = 110.416664;
+
+    try {
+      final address = await apiService.fetchAddress(lat, lon);
+    } catch (e) {
+      print("error : $e");
+    }
   }
 
   void fetchAllData() async {
@@ -102,10 +122,13 @@ class _DetailsPageViewState extends State<DetailsPageView> {
         await getBytesFromAsset('assets/icons/arrow_red.png', 40);
     final Uint8List greyMarkerIconData =
         await getBytesFromAsset('assets/icons/arrow_gray.png', 40);
+    final Uint8List arrowIconData =
+        await getBytesFromAsset('assets/icons/arrow-point.png', 20);
 
     _greenMarkerIcon = BitmapDescriptor.fromBytes(greenMarkerIconData);
     _redMarkerIcon = BitmapDescriptor.fromBytes(redMarkerIconData);
     _greyMarkerIcon = BitmapDescriptor.fromBytes(greyMarkerIconData);
+    _arrowIcon = BitmapDescriptor.fromBytes(arrowIconData);
   }
 
   Future<Uint8List> getBytesFromAsset(String path, int width) async {
@@ -134,7 +157,7 @@ class _DetailsPageViewState extends State<DetailsPageView> {
       polylineId: polylineId,
       color: Colors.red,
       points: polylineCoordinates,
-      width: 2,
+      width: 1,
     );
 
     return Set.of([polyline]);
@@ -169,15 +192,17 @@ class _DetailsPageViewState extends State<DetailsPageView> {
     List<JdetailsItem> stopDetails =
         detailsItem.where((detail) => detail.type == 1).toList();
 
-    final List<Marker> stopMarkers = stopDetails.map((detail) {
+    final List<Marker> stopMarkers = stopDetails.asMap().entries.map((entry) {
+      final int index = entry.key;
+      final JdetailsItem detail = entry.value;
       return Marker(
         markerId: MarkerId("${detail.startdt}-${detail.enddt}"),
         position: LatLng(detail.lat, detail.lon),
         icon: BitmapDescriptor.defaultMarker,
         infoWindow: InfoWindow(
-          title: "Berhenti",
+          title: "Pemberhentian ke ${index + 1}",
           snippet:
-              "Jam: ${DateFormat.Hm().format(DateTime.fromMillisecondsSinceEpoch(detail.startdt * 1000))}",
+              "Di jam: ${DateFormat.Hm().format(DateTime.fromMillisecondsSinceEpoch(detail.startdt * 1000))}",
         ),
       );
     }).toList();
@@ -196,7 +221,6 @@ class _DetailsPageViewState extends State<DetailsPageView> {
     if (index >= dailyData.length) index = dailyData.length - 1;
 
     final DataItem currentDaily = dailyData[index];
-    // Ubah format waktu sesuai kebutuhan
     return DateFormat.Hm()
         .format(DateTime.fromMillisecondsSinceEpoch(currentDaily.gpsdt * 1000));
   }
@@ -226,8 +250,9 @@ class _DetailsPageViewState extends State<DetailsPageView> {
   }
 
   bool _isForwardButtonEnabled() {
-    DateTime maxDate =
-        DateTime.fromMillisecondsSinceEpoch(widget.gpsdt * 1000, isUtc: true);
+    DateTime maxDate = DateTime.fromMillisecondsSinceEpoch(
+        widget.initialGpsdt * 1000,
+        isUtc: true);
     DateTime selectedDateUtc = DateTime.utc(
         _selectedDate.year, _selectedDate.month, _selectedDate.day);
     return selectedDateUtc.isBefore(maxDate);
@@ -259,11 +284,11 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                     onPressed: () {
                       setState(() {
                         _selectedDate =
-                            _selectedDate.subtract(Duration(days: 1));
+                            _selectedDate.subtract(const Duration(days: 1));
                         _updateStartEpoch();
                       });
                     },
-                    icon: Icon(Icons.arrow_back),
+                    icon: const Icon(Icons.arrow_back),
                   ),
                   Container(
                     decoration: BoxDecoration(
@@ -282,7 +307,7 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                       child: Text(
                         '${_selectedDate.day} ${DateFormat.MMMM().format(_selectedDate)}, ${_selectedDate.year}',
                         style: GoogleFonts.poppins(
-                            fontSize: 16, color: Colors.white),
+                            fontSize: 16, color: GlobalColor.textColor),
                       ),
                     ),
                   ),
@@ -291,12 +316,12 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                         ? () {
                             setState(() {
                               _selectedDate =
-                                  _selectedDate.add(Duration(days: 1));
+                                  _selectedDate.add(const Duration(days: 1));
                               _updateStartEpoch();
                             });
                           }
                         : null,
-                    icon: Icon(Icons.arrow_forward),
+                    icon: const Icon(Icons.arrow_forward),
                   )
                 ],
               ),
@@ -304,6 +329,7 @@ class _DetailsPageViewState extends State<DetailsPageView> {
             Row(
               children: [
                 Expanded(
+                  flex: _selectedTabIndex == 0 ? 2 : 1,
                   child: MaterialButton(
                     onPressed: () {
                       setState(() {
@@ -312,12 +338,21 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                     },
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8.0),
-                      side: BorderSide(color: Colors.black, width: 1.0),
+                      side: const BorderSide(color: Colors.black, width: 0.5),
                     ),
-                    child: Text('Map'),
+                    color: _selectedTabIndex == 0 ? Colors.grey[400] : null,
+                    child: Text(
+                      'Map',
+                      style: GoogleFonts.poppins(
+                        fontWeight: _selectedTabIndex == 0
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
+                    ),
                   ),
                 ),
                 Expanded(
+                  flex: _selectedTabIndex == 1 ? 2 : 1,
                   child: MaterialButton(
                     onPressed: () {
                       setState(() {
@@ -326,12 +361,19 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                     },
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8.0),
-                      side: BorderSide(color: Colors.black, width: 1.0),
+                      side: const BorderSide(color: Colors.black, width: 0.5),
                     ),
-                    child: Text('Narasi'),
+                    color: _selectedTabIndex == 1 ? Colors.grey[400] : null,
+                    child: Text('Narasi',
+                        style: GoogleFonts.poppins(
+                          fontWeight: _selectedTabIndex == 1
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        )),
                   ),
                 ),
                 Expanded(
+                  flex: _selectedTabIndex == 2 ? 2 : 1,
                   child: MaterialButton(
                     onPressed: () {
                       setState(() {
@@ -340,12 +382,19 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                     },
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8.0),
-                      side: BorderSide(color: Colors.black, width: 1.0),
+                      side: const BorderSide(color: Colors.black, width: 0.5),
                     ),
-                    child: Text('Event'),
+                    color: _selectedTabIndex == 2 ? Colors.grey[400] : null,
+                    child: Text('Event',
+                        style: GoogleFonts.poppins(
+                          fontWeight: _selectedTabIndex == 2
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        )),
                   ),
                 ),
                 Expanded(
+                  flex: _selectedTabIndex == 3 ? 2 : 1,
                   child: MaterialButton(
                     onPressed: () {
                       setState(() {
@@ -354,15 +403,21 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                     },
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8.0),
-                      side: BorderSide(color: Colors.black, width: 1.0),
+                      side: const BorderSide(color: Colors.black, width: 0.5),
                     ),
-                    child: Text('Grafik'),
+                    color: _selectedTabIndex == 3 ? Colors.grey[400] : null,
+                    child: Text('Grafik',
+                        style: GoogleFonts.poppins(
+                          fontWeight: _selectedTabIndex == 3
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        )),
                   ),
                 ),
               ],
             ),
             SizedBox(
-              height: MediaQuery.of(context).size.height * 0.75,
+              height: MediaQuery.of(context).size.height * 0.7,
               child: Builder(
                 builder: (context) {
                   return _selectedTabIndex == 0
@@ -381,99 +436,118 @@ class _DetailsPageViewState extends State<DetailsPageView> {
     );
   }
 
+  Widget _buildLoadingDialog() {
+    return const Center(
+      child: CircularProgressIndicator(),
+    );
+  }
+
   Widget _buildMapWidget() {
-    return dailyData.isEmpty
-        ? Center(
-            child: Container(
-              width: double.infinity,
-              height: double.infinity,
-              color: Colors.grey[300],
-            ),
-          )
-        : Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    return _isLoading
+        ? _buildLoadingDialog()
+        : dailyData.isEmpty
+            ? Center(
+                child: Container(
+                  width: double.infinity,
+                  height: double.infinity,
+                  color: Colors.grey[300],
+                  child: const Center(
+                    child: Text(
+                      'Data tidak ada',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            : Column(
                 children: [
-                  Column(
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      IconButton(
-                        icon: Icon(Icons.access_time,
-                            size: 30, color: Colors.black),
-                        onPressed: () {},
+                      Column(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.access_time,
+                                size: 30, color: Colors.black),
+                            onPressed: () {},
+                          ),
+                          Text(
+                            '${_getTimeForSliderValue(_sliderValue)}',
+                            style: GoogleFonts.poppins(),
+                          ),
+                        ],
                       ),
-                      Text(
-                        '${_getTimeForSliderValue(_sliderValue)}',
-                        style: GoogleFonts.poppins(),
+                      Column(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.speed,
+                                size: 30, color: Colors.black),
+                            onPressed: () {},
+                          ),
+                          Text(
+                            '${_getSpeedForSliderValue(_sliderValue)} KM/H',
+                            style: GoogleFonts.poppins(),
+                          ),
+                        ],
+                      ),
+                      Column(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.thermostat,
+                                size: 30, color: Colors.black),
+                            onPressed: () {},
+                          ),
+                          Text(
+                            '${_getTemperatureForSliderValue(_sliderValue)}°',
+                            style: GoogleFonts.poppins(),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                  Column(
-                    children: [
-                      IconButton(
-                        icon: Icon(Icons.speed, size: 30, color: Colors.black),
-                        onPressed: () {},
+                  Expanded(
+                    child: GoogleMap(
+                      initialCameraPosition: CameraPosition(
+                        target: _initialCameraPosition,
+                        zoom: 8,
                       ),
-                      Text(
-                        '${_getSpeedForSliderValue(_sliderValue)} KM/H',
-                        style: GoogleFonts.poppins(),
-                      ),
-                    ],
+                      markers: _createMarkers(_sliderValue),
+                      polylines: _createPolylines(),
+                      onMapCreated: (controller) {
+                        setState(() {
+                          _mapController = controller;
+                        });
+                        _updateCameraPosition(_sliderValue);
+                      },
+                    ),
                   ),
-                  Column(
-                    children: [
-                      IconButton(
-                        icon: Icon(Icons.thermostat,
-                            size: 30, color: Colors.black),
-                        onPressed: () {},
+                  SizedBox(
+                    height: 100,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
                       ),
-                      Text(
-                        '${_getTemperatureForSliderValue(_sliderValue)}°',
-                        style: GoogleFonts.poppins(),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Slider(
+                        value: _sliderValue,
+                        min: 0,
+                        max: 100,
+                        onChanged: (newValue) {
+                          setState(() {
+                            _sliderValue = newValue;
+                            _updateCameraPosition(newValue);
+                          });
+                        },
+                        activeColor: Colors.black,
+                        inactiveColor: Colors.black,
                       ),
-                    ],
+                    ),
                   ),
                 ],
-              ),
-              Expanded(
-                child: GoogleMap(
-                  initialCameraPosition: CameraPosition(
-                    target: _initialCameraPosition,
-                    zoom: 10,
-                  ),
-                  markers: _createMarkers(_sliderValue),
-                  polylines: _createPolylines(),
-                  onMapCreated: (controller) {
-                    setState(() {
-                      _mapController = controller;
-                    });
-                  },
-                ),
-              ),
-              SizedBox(
-                height: 100,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                  ),
-                  padding: EdgeInsets.symmetric(horizontal: 20),
-                  child: Slider(
-                    value: _sliderValue,
-                    min: 0,
-                    max: 100,
-                    onChanged: (newValue) {
-                      setState(() {
-                        _sliderValue = newValue;
-                        _updateCameraPosition(newValue);
-                      });
-                    },
-                    activeColor: Colors.black,
-                    inactiveColor: Colors.black,
-                  ),
-                ),
-              ),
-            ],
-          );
+              );
   }
 
   Widget _buildNarationWidget() {
@@ -481,12 +555,12 @@ class _DetailsPageViewState extends State<DetailsPageView> {
       future: fetchNarationData(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator());
+          return const Center(child: CircularProgressIndicator());
         } else if (snapshot.hasError) {
-          return Center(child: Text('Data tidak ada'));
+          return const Center(child: Text('Data tidak ada'));
         } else {
           if (snapshot.data == null || snapshot.data!.isEmpty) {
-            return Center(child: Text('Data Narasi tidak ada'));
+            return const Center(child: Text('Data Narasi tidak ada'));
           } else {
             return SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -496,7 +570,8 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                   width: MediaQuery.of(context).size.width,
                   child: DataTable(
                     columnSpacing: 20,
-                    headingTextStyle: TextStyle(fontWeight: FontWeight.bold),
+                    headingTextStyle:
+                        const TextStyle(fontWeight: FontWeight.bold),
                     columns: const [
                       DataColumn(
                         label: Text('Waktu',
@@ -516,12 +591,14 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                     rows: snapshot.data!.map((item) {
                       return DataRow(cells: [
                         DataCell(Text(
-                          '${_formatTime(item.startdt)} - ${_formatTime(item.enddt)}',
-                          style: TextStyle(fontSize: 18, fontFamily: 'Poppins'),
+                          '${_formatTime(item.startdt)} - ${_formatTime(item.enddt)}            ',
+                          style: const TextStyle(
+                              fontSize: 18, fontFamily: 'Poppins'),
                         )),
                         DataCell(Text(
                           '${formatNaration(item)}',
-                          style: TextStyle(fontSize: 18, fontFamily: 'Poppins'),
+                          style: const TextStyle(
+                              fontSize: 18, fontFamily: 'Poppins'),
                         )),
                       ]);
                     }).toList(),
@@ -567,12 +644,12 @@ class _DetailsPageViewState extends State<DetailsPageView> {
       future: fetchEventData(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator());
+          return const Center(child: CircularProgressIndicator());
         } else if (snapshot.hasError) {
-          return Center(child: Text('Data tidak ada'));
+          return const Center(child: Text('Data tidak ada'));
         } else {
           if (snapshot.data == null || snapshot.data!.isEmpty) {
-            return Center(child: Text('Data Event tidak ada'));
+            return const Center(child: Text('Data Event tidak ada'));
           } else {
             return SingleChildScrollView(
               scrollDirection: Axis.vertical,
@@ -582,7 +659,8 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                   width: MediaQuery.of(context).size.width,
                   child: DataTable(
                     columnSpacing: 20,
-                    headingTextStyle: TextStyle(fontWeight: FontWeight.bold),
+                    headingTextStyle:
+                        const TextStyle(fontWeight: FontWeight.bold),
                     columns: const [
                       DataColumn(
                         label: Text('Waktu',
@@ -630,16 +708,16 @@ class _DetailsPageViewState extends State<DetailsPageView> {
       future: fetchDataItem(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator());
+          return const Center(child: CircularProgressIndicator());
         } else if (snapshot.hasError) {
-          return Center(
+          return const Center(
             child: Text(
               'Data tidak ada',
               style: TextStyle(fontFamily: 'Poppins'),
             ),
           );
         } else if (snapshot.data == null || snapshot.data!.isEmpty) {
-          return Center(
+          return const Center(
             child: Text(
               'Data Suhu tidak ada',
               style: TextStyle(fontFamily: 'Poppins'),
@@ -647,20 +725,20 @@ class _DetailsPageViewState extends State<DetailsPageView> {
           );
         } else {
           List<DataItem> chartData = snapshot.data!;
-
           return Column(
             children: [
               Expanded(
                 child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Container(
-                    width: 2000,
+                  // scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: 1200,
+                    height: 600,
                     child: SfCartesianChart(
                       key: _cartesianChartKey,
                       title: ChartTitle(
                         text:
-                            'Grafik Suhu ${_selectedDate.day} ${DateFormat.MMMM().format(_selectedDate)}, ${_selectedDate.year}',
-                        textStyle: TextStyle(
+                            'Grafik Suhu dan Kecepatan ${widget.vehicleName} | ${_selectedDate.day} ${DateFormat.MMMM().format(_selectedDate)}, ${_selectedDate.year}',
+                        textStyle: const TextStyle(
                           fontFamily: 'Poppins',
                           fontWeight: FontWeight.bold,
                         ),
@@ -672,12 +750,30 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                           xValueMapper: (DataItem data, _) =>
                               DateTime.fromMillisecondsSinceEpoch(
                                   data.gpsdt * 1000),
+                          yValueMapper: (DataItem data, _) =>
+                              data.speed.toDouble(),
+                          name: 'Kecepatan',
+                          color: Colors.orange[300],
+                          yAxisName: 'Kecepatan',
+                          width: 1,
+                          legendItemText: 'Kecepatan (KM/H)',
+                        ),
+                        LineSeries<DataItem, DateTime>(
+                          dataSource: chartData,
+                          xValueMapper: (DataItem data, _) =>
+                              DateTime.fromMillisecondsSinceEpoch(
+                                  data.gpsdt * 1000),
                           yValueMapper: (DataItem data, _) => data.temp / 10,
                           name: 'Suhu',
-                        )
+                          color: Colors.blue[700],
+                          yAxisName: 'Suhu',
+                          width: 1,
+                          legendIconType: LegendIconType.horizontalLine,
+                          legendItemText: 'Suhu (°C)',
+                        ),
                       ],
                       primaryXAxis: DateTimeAxis(
-                        title: AxisTitle(
+                        title: const AxisTitle(
                           text: 'Waktu',
                           textStyle: TextStyle(
                             fontFamily: 'Poppins',
@@ -685,16 +781,42 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                           ),
                         ),
                         dateFormat: DateFormat.Hm(),
+                        majorGridLines: MajorGridLines(width: 0),
+                        intervalType: DateTimeIntervalType.hours,
+                        interval: 1,
                       ),
-                      primaryYAxis: NumericAxis(
+                      primaryYAxis: const NumericAxis(
+                        opposedPosition: true,
+                        name: 'Kecepatan',
                         title: AxisTitle(
-                          text: 'Suhu',
                           textStyle: TextStyle(
                             fontFamily: 'Poppins',
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        minimum: 18,
+                        minimum: 0,
+                        interval: 20,
+                      ),
+                      axes: const <ChartAxis>[
+                        NumericAxis(
+                          name: 'Suhu',
+                          opposedPosition: false,
+                          title: AxisTitle(
+                            textStyle: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          minimum: 0,
+                          interval: 10,
+                        ),
+                      ],
+                      legend: const Legend(
+                        isVisible: true,
+                        textStyle: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15),
                       ),
                     ),
                   ),
@@ -708,16 +830,16 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                   backgroundColor:
                       MaterialStateProperty.all<Color>(Colors.grey),
                 ),
-                child: const Text(
+                child: Text(
                   'Export as image',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: GlobalColor.textColor,
                   ),
                 ),
-              )
+              ),
             ],
           );
         }
@@ -726,54 +848,65 @@ class _DetailsPageViewState extends State<DetailsPageView> {
   }
 
   Future<void> _renderChartAsImage(BuildContext context) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return const AlertDialog(
+          title: Text('Processing'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Mohon tunggu...'),
+            ],
+          ),
+        );
+      },
+    );
+
     final ui.Image? data =
         await _cartesianChartKey.currentState!.toImage(pixelRatio: 3.0);
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder,
+        Rect.fromPoints(const Offset(0.0, 0.0), const Offset(3600.0, 1808.0)));
+    canvas.drawColor(GlobalColor.textColor, BlendMode.dstOver);
+    canvas.drawImage(data!, Offset.zero, Paint());
+    final ui.Image finalImage =
+        await recorder.endRecording().toImage(3600, 1808);
+
     final ByteData? bytes =
-        await data?.toByteData(format: ui.ImageByteFormat.png);
+        await finalImage.toByteData(format: ui.ImageByteFormat.png);
     final Uint8List imageBytes =
         bytes!.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes);
 
-    // Simpan gambar ke galeri
     final result = await ImageGallerySaver.saveImage(imageBytes);
 
-    // Tampilkan pesan berdasarkan hasil simpan
-    if (result['isSuccess']) {
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text('Image saved'),
-            content: Text('The image has been saved to your gallery.'),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                child: Text('OK'),
-              ),
-            ],
-          );
-        },
-      );
-    } else {
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text('Failed to save image'),
-            content: Text('Failed to save the image to your gallery.'),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                child: Text('OK'),
-              ),
-            ],
-          );
-        },
-      );
-    }
+    Navigator.of(context).pop();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: result['isSuccess']
+              ? const Text('Foto Tersimpan')
+              : const Text('Gagal untuk menyimpan foto'),
+          content: result['isSuccess']
+              ? const Text('Foto telah tersimpan di galeri anda.')
+              : const Text('Gagal untuk menyimpan foto ke galeri anda'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _updateCameraPosition(double sliderValue) {
@@ -798,6 +931,11 @@ class _DetailsPageViewState extends State<DetailsPageView> {
     final int startEpoch = selectedDateUtc.millisecondsSinceEpoch ~/ 1000;
 
     try {
+      setState(() {
+        widget.gpsdt = startEpoch;
+        _isLoading = true;
+      });
+
       final Data dataAll =
           await apiService.fetchDailyHistory(vehicleId, startEpoch);
 
@@ -806,19 +944,16 @@ class _DetailsPageViewState extends State<DetailsPageView> {
         dailyData = allData.isNotEmpty ? allData[0].data : [];
         inputData = allData.isNotEmpty ? dataAll.inputlogs : [];
 
-        if (_selectedTabIndex == 0 &&
-            dailyData.isNotEmpty &&
-            _mapController != null) {
+        if (_selectedTabIndex == 0 && dailyData.isNotEmpty) {
           final DataItem currentDaily = dailyData.first;
           _initialCameraPosition =
               LatLng(currentDaily.latitude, currentDaily.longitude);
 
-          _mapController.animateCamera(
-            CameraUpdate.newLatLng(_initialCameraPosition),
-          );
+          // _mapController.animateCamera(
+          //   CameraUpdate.newLatLng(_initialCameraPosition),
+          // );
         }
 
-        // Update stopMarkers
         detailsItem = allData.isNotEmpty ? dataAll.jdetails : [];
         final List<Marker> updatedStopMarkers =
             detailsItem.where((detail) => detail.type == 1).map((detail) {
@@ -834,12 +969,15 @@ class _DetailsPageViewState extends State<DetailsPageView> {
           );
         }).toList();
 
-        // Replace existing stopMarkers with updatedStopMarkers
         stopMarkers.clear();
         stopMarkers.addAll(updatedStopMarkers);
       });
     } catch (e) {
       print("error : $e");
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -851,19 +989,19 @@ class _DetailsPageViewState extends State<DetailsPageView> {
       lastDate: DateTime(2101),
       selectableDayPredicate: (DateTime date) {
         DateTime lastSelectableDate = DateTime.fromMillisecondsSinceEpoch(
-          widget.gpsdt * 1000,
+          widget.initialGpsdt * 1000,
           isUtc: true,
-        ).add(Duration(days: 1));
+        ).add(const Duration(days: 1));
         return date.isBefore(lastSelectableDate);
       },
     );
     if (picked != null && picked != _selectedDate) {
       DateTime gpsdtUtc = DateTime.fromMillisecondsSinceEpoch(
-        widget.gpsdt * 1000,
+        widget.initialGpsdt * 1000,
         isUtc: true,
       );
       DateTime gpsdtWIB = gpsdtUtc.add(const Duration(hours: 7));
-      DateTime pickedWIB = picked.add(Duration(hours: 7));
+      DateTime pickedWIB = picked.add(const Duration(hours: 7));
       if (pickedWIB !=
           DateTime(pickedWIB.year, pickedWIB.month, pickedWIB.day)) {
         setState(() {
@@ -871,7 +1009,7 @@ class _DetailsPageViewState extends State<DetailsPageView> {
         });
         _updateStartEpoch();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text(
               "Anda tidak dapat memilih tanggal yang cocok dengan tanggal data."),
         ));

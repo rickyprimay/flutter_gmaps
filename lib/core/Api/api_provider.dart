@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:VehiLoc/core/model/response_vehicles.dart';
-import 'package:VehiLoc/features/vehicles/api/api_service.dart';
+import 'package:VehiLoc/core/Api/api_service.dart';
 
 class ApiProvider extends ChangeNotifier {
   final ApiService _apiService = ApiService();

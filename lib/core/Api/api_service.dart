@@ -85,4 +85,40 @@ class ApiService {
       throw Exception('Error during API request: $e');
     }
   }
+
+  Future<String> fetchAddress(double lat, double lon) async {
+    final String apiUrl = "$baseUrl/address?lat=$lat&lon=$lon";
+
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+
+      final String username = prefs.getString('username') ?? "";
+      final String password = prefs.getString('password') ?? "";
+
+      if (username.isEmpty || password.isEmpty) {
+        logger.e("Username or password not found");
+        return "";
+      }
+
+      final String basicAuth =
+          'Basic ' + base64Encode(utf8.encode('$username:$password'));
+
+      final response = await http.get(
+        Uri.parse(apiUrl),
+        headers: {'Authorization': basicAuth},
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> jsonResponse = json.decode(response.body);
+        logger.i("Address result : $jsonResponse");
+        return jsonResponse['address'];
+      } else {
+        logger.e("API request failed with status code: ${response.statusCode}");
+        return "";
+      }
+    } catch (e) {
+      logger.e("Error during API request: $e");
+      return "";
+    }
+  }
 }

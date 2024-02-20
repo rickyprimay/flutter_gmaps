@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
-import 'package:VehiLoc/features/auth/presentation/login/login.view.dart';
+import 'package:VehiLoc/features/auth/login/login_view.dart';
 
 void main() {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
@@ -15,7 +15,7 @@ class App extends StatelessWidget {
   Widget build(BuildContext context) {
     FlutterNativeSplash.remove();
     
-    return MaterialApp(
+    return const MaterialApp(
       home: LoginView(),
     );
   }

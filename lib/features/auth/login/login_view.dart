@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:google_fonts/google_fonts.dart'; // Import Google Fonts package
-import 'package:VehiLoc/core/utils/conts.dart';
-import 'package:VehiLoc/features/auth/presentation/widget/form.login.dart';
-import 'package:VehiLoc/features/home/home.view.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:VehiLoc/core/utils/colors.dart';
+import 'package:VehiLoc/features/auth/widget/form_login.dart';
+import 'package:VehiLoc/features/home/home_view.dart';
 
 class LoginView extends StatefulWidget {
+  const LoginView({super.key});
+
   @override
   _LoginViewState createState() => _LoginViewState();
 }
@@ -133,6 +135,7 @@ class _LoginViewState extends State<LoginView> {
                   text: 'Username',
                   textInputType: TextInputType.text,
                   obscure: false,
+                  
                 ),
 
                 const SizedBox(
@@ -153,7 +156,7 @@ class _LoginViewState extends State<LoginView> {
 
                 Center(
                   child: ElevatedButton(
-                    onPressed: isLoading ? null : _login, // Tombol login
+                    onPressed: isLoading ? null : _login,
                     style: ButtonStyle(
                       minimumSize: MaterialStateProperty.all(Size(
                         MediaQuery.of(context).size.width * 1.0,
@@ -187,8 +190,7 @@ class _LoginViewState extends State<LoginView> {
                 ),
                 Center(
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment
-                        .center, // Menengahkan elemen di dalam Column
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
                         'Versi: 0.1.0', // Label versi

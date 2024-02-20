@@ -11,6 +11,7 @@ class Vehicle {
   int? baseMcc;
   int? bearing;
   List<Sensor>? sensors;
+  bool isTapped = false;
 
   Vehicle({
     required this.customerName,
@@ -42,26 +43,26 @@ class Vehicle {
     if (json['sensors'] != null) {
       sensors = <Sensor>[];
       json['sensors'].forEach((v) {
-        sensors!.add(new Sensor.fromJson(v));
+        sensors!.add(Sensor.fromJson(v));
       });
     }
   }
 
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> data = new Map<String, dynamic>();
-    data['customer_name'] = this.customerName;
-    data['name'] = this.name;
-    data['plate_no'] = this.plateNo;
-    data['gpsdt'] = this.gpsdt;
-    data['speed'] = this.speed;
-    data['lat'] = this.lat;
-    data['lon'] = this.lon;
-    data['vehicle_id'] = this.vehicleId;
-    data['type'] = this.type;
-    data['base_mcc'] = this.baseMcc;
-    data['bearing'] = this.bearing;
-    if (this.sensors != null) {
-      data['sensors'] = this.sensors!.map((v) => v.toJson()).toList();
+    data['customer_name'] = customerName;
+    data['name'] = name;
+    data['plate_no'] = plateNo;
+    data['gpsdt'] = gpsdt;
+    data['speed'] = speed;
+    data['lat'] = lat;
+    data['lon'] = lon;
+    data['vehicle_id'] = vehicleId;
+    data['type'] = type;
+    data['base_mcc'] = baseMcc;
+    data['bearing'] = bearing;
+    if (sensors != null) {
+      data['sensors'] = sensors!.map((v) => v.toJson()).toList();
     }
     return data;
   }
