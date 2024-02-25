@@ -7,11 +7,18 @@ class Data {
 
   factory Data.fromJson(Map<String, dynamic> json) {
     return Data(
-      data: List<DataItem>.from(json['data'].map((x) => DataItem.fromJson(x))),
-      inputlogs: List<InputLogsItem>.from(
-          json['inputlogs'].map((x) => InputLogsItem.fromJson(x))),
-      jdetails: List<JdetailsItem>.from(
-          json['jdetails'].map((x) => JdetailsItem.fromJson(x))),
+      data: (json['data'] as List<dynamic>?)
+              ?.map((x) => DataItem.fromJson(x))
+              .toList() ??
+          [],
+      inputlogs: (json['inputlogs'] as List<dynamic>?)
+              ?.map((x) => InputLogsItem.fromJson(x))
+              .toList() ??
+          [],
+      jdetails: (json['jdetails'] as List<dynamic>?)
+              ?.map((x) => JdetailsItem.fromJson(x))
+              .toList() ??
+          [],
     );
   }
 }
@@ -24,6 +31,7 @@ class DataItem {
   final double longitude;
   final int speed;
   final int temp;
+  final String colorBox;
 
   DataItem({
     required this.bearing,
@@ -33,18 +41,30 @@ class DataItem {
     required this.longitude,
     required this.speed,
     required this.temp,
-  });
+  }) : colorBox = _calculateColorBox(speed);
 
   factory DataItem.fromJson(Map<String, dynamic> json) {
     return DataItem(
-      bearing: json['bearing'],
-      gpsdt: json['gpsdt'],
-      ioStates: json['io_states'],
-      latitude: json['latitude'],
-      longitude: json['longitude'],
-      speed: json['speed'],
-      temp: json['temp'],
+      bearing: json['bearing'] ?? 0,
+      gpsdt: json['gpsdt'] ?? 0,
+      ioStates: json['io_states'] ?? 0,
+      latitude: json['latitude'] ?? 0.0,
+      longitude: json['longitude'] ?? 0.0,
+      speed: json['speed'] ?? 0,
+      temp: json['temp'] ?? 0,
     );
+  }
+
+  static String _calculateColorBox(int speed) {
+    if (speed == 0) {
+      return 'white';
+    } else if (speed >= 5 && speed <= 60) {
+      return 'green';
+    } else if (speed >= 61 && speed <= 100 ){
+      return 'yellow';
+    } else {
+      return 'red';
+    }
   }
 }
 
@@ -69,13 +89,13 @@ class InputLogsItem {
 
   factory InputLogsItem.fromJson(Map<String, dynamic> json) {
     return InputLogsItem(
-      dt: json['dt'],
-      inputNo: json['input_no'],
-      newState: json['new_state'],
-      newStateBgcolor: json['new_state_bgcolor'],
-      newStateDesc: json['new_state_desc'],
-      sensorName: json['sensor_name'],
-      vehicleId: json['vehicle_id'],
+      dt: json['dt'] ?? 0,
+      inputNo: json['input_no'] ?? 0,
+      newState: json['new_state'] ?? false,
+      newStateBgcolor: json['new_state_bgcolor'] ?? '',
+      newStateDesc: json['new_state_desc'] ?? '',
+      sensorName: json['sensor_name'] ?? '',
+      vehicleId: json['vehicle_id'] ?? 0,
     );
   }
 }
@@ -103,14 +123,14 @@ class JdetailsItem {
 
   factory JdetailsItem.fromJson(Map<String, dynamic> json) {
     return JdetailsItem(
-      distance: json['distance']?.toDouble(),
-      enddt: json['enddt'],
-      geofences: json['geofences'],
-      gfid: json['gfid'],
-      lat: json['lat']?.toDouble(),
-      lon: json['lon']?.toDouble(),
-      startdt: json['startdt'],
-      type: json['type'],
+      distance: json['distance']?.toDouble() ?? 0.0,
+      enddt: json['enddt'] ?? 0,
+      geofences: json['geofences'] ?? [],
+      gfid: json['gfid'] ?? 0,
+      lat: json['lat']?.toDouble() ?? 0.0,
+      lon: json['lon']?.toDouble() ?? 0.0,
+      startdt: json['startdt'] ?? 0,
+      type: json['type'] ?? 0,
     );
   }
 }

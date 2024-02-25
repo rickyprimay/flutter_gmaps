@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:persistent_bottom_nav_bar/persistent_tab_view.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:VehiLoc/core/utils/colors.dart';
 import 'package:VehiLoc/features/auth/widget/form_login.dart';
-import 'package:VehiLoc/features/home/home_view.dart';
+import 'package:VehiLoc/features/map/widget/BottomBar.dart';
+import 'package:logger/logger.dart';
 
 class LoginView extends StatefulWidget {
-  const LoginView({super.key});
+  const LoginView({Key? key}) : super(key: key);
 
   @override
   _LoginViewState createState() => _LoginViewState();
@@ -19,6 +21,7 @@ class _LoginViewState extends State<LoginView> {
   final TextEditingController _passwordController = TextEditingController();
 
   bool isLoading = false;
+  final Logger logger = Logger();
 
   @override
   void initState() {
@@ -33,8 +36,39 @@ class _LoginViewState extends State<LoginView> {
     if (token != null && token.isNotEmpty) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => HomeView()),
+        MaterialPageRoute(builder: (context) => BottomBar()),
       );
+    } else {
+      _fetchAndCacheCustomerSalts();
+    }
+  }
+
+  Future<void> _fetchAndCacheCustomerSalts() async {
+    const String apiUrl = 'https://vehiloc.net/rest/customer_salts';
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? username = prefs.getString('username');
+    String? password = prefs.getString('password');
+
+    if (username != null && password != null) {
+      final String basicAuth =
+          'Basic ' + base64Encode(utf8.encode('$username:$password'));
+
+      try {
+        final http.Response response = await http.get(
+          Uri.parse(apiUrl),
+          headers: {'Authorization': basicAuth},
+        );
+
+        if (response.statusCode == 200) {
+          prefs.setString('customerSalts', response.body);
+          logger.i('Customer Salts = ${response.body}');
+        } else {
+          logger.e(
+              'Failed to fetch customer salts. Status code: ${response.statusCode}');
+        }
+      } catch (error) {
+        logger.e('Error: $error');
+      }
     }
   }
 
@@ -47,9 +81,9 @@ class _LoginViewState extends State<LoginView> {
     final String password = _passwordController.text.trim();
 
     final String basicAuth =
-        'Basic ' + base64Encode(utf8.encode('$username:$password'));
+        'Basic ${base64Encode(utf8.encode('$username:$password'))}';
 
-    final String apiUrl = 'https://vehiloc.net/rest/token';
+    const String apiUrl = 'https://vehiloc.net/rest/token';
 
     try {
       final http.Response response = await http.get(
@@ -63,25 +97,27 @@ class _LoginViewState extends State<LoginView> {
 
         SharedPreferences prefs = await SharedPreferences.getInstance();
         prefs.setString('token', token);
-
         prefs.setString('username', username);
         prefs.setString('password', password);
 
-        Navigator.pushReplacement(
+        _fetchAndCacheCustomerSalts();
+
+        PersistentNavBarNavigator.pushDynamicScreen(
           context,
-          MaterialPageRoute(builder: (context) => HomeView()),
+          screen: MaterialPageRoute(builder: (context) => BottomBar()),
+          withNavBar: false,
         );
       } else {
-        print('Gagal login. Status code: ${response.statusCode}');
+        logger.e('Failed to login. Status code: ${response.statusCode}');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Password atau Email salah. Silakan coba lagi.'),
             duration: Duration(seconds: 3),
           ),
         );
       }
     } catch (error) {
-      print('Error: $error');
+      logger.e('Error: $error');
     } finally {
       setState(() {
         isLoading = false;
@@ -108,7 +144,6 @@ class _LoginViewState extends State<LoginView> {
                   child: Text(
                     'VehiLoc',
                     style: GoogleFonts.poppins(
-                      // Apply Google Fonts
                       color: GlobalColor.mainColor,
                       fontSize: 35,
                       fontWeight: FontWeight.bold,
@@ -121,7 +156,6 @@ class _LoginViewState extends State<LoginView> {
                 Text(
                   'Login ke akun anda',
                   style: GoogleFonts.poppins(
-                    // Apply Google Fonts
                     color: GlobalColor.mainColor,
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
@@ -135,25 +169,19 @@ class _LoginViewState extends State<LoginView> {
                   text: 'Username',
                   textInputType: TextInputType.text,
                   obscure: false,
-                  
                 ),
-
                 const SizedBox(
                   height: 10,
                 ),
-
-                /// Password
                 TextFormLogin(
                   controller: _passwordController,
                   text: 'Password',
                   textInputType: TextInputType.text,
                   obscure: true,
                 ),
-
                 const SizedBox(
                   height: 15,
                 ),
-
                 Center(
                   child: ElevatedButton(
                     onPressed: isLoading ? null : _login,
@@ -172,13 +200,12 @@ class _LoginViewState extends State<LoginView> {
                       elevation: MaterialStateProperty.all(10),
                     ),
                     child: isLoading
-                        ? CircularProgressIndicator(
+                        ? const CircularProgressIndicator(
                             color: Colors.white,
                           )
                         : Text(
                             'Login',
                             style: GoogleFonts.poppins(
-                              // Apply Google Fonts
                               color: Colors.white,
                               fontWeight: FontWeight.w600,
                             ),
@@ -193,18 +220,16 @@ class _LoginViewState extends State<LoginView> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Versi: 0.1.0', // Label versi
+                        'Versi: 0.1.0',
                         style: GoogleFonts.poppins(
-                          // Apply Google Fonts
                           color: GlobalColor.mainColor,
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                       Text(
-                        'vehiloc.net', // Versi aplikasi
+                        'vehiloc.net',
                         style: GoogleFonts.poppins(
-                          // Apply Google Fonts
                           color: GlobalColor.mainColor,
                           fontSize: 16,
                           fontWeight: FontWeight.w500,

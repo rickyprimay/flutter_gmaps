@@ -39,6 +39,7 @@ class _TextFormLoginState extends State<TextFormLogin> {
       ),
       child: TextFormField(
         controller: widget.controller,
+        autofillHints: const [AutofillHints.username],
         keyboardType: widget.textInputType,
         obscureText: widget.obscure && _obscureText,
         decoration: InputDecoration(
@@ -50,8 +51,7 @@ class _TextFormLoginState extends State<TextFormLogin> {
           ),
           suffixIcon: widget.obscure
               ? IconButton(
-                  icon: Icon(
-                      _obscureText ? Icons.visibility : Icons.visibility_off),
+                  icon: Icon(_obscureText ? Icons.visibility : Icons.visibility_off),
                   onPressed: () {
                     setState(() {
                       _obscureText = !_obscureText;

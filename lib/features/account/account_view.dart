@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:persistent_bottom_nav_bar/persistent_tab_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:VehiLoc/core/utils/colors.dart';
 import 'package:VehiLoc/features/account/widget/button_logout.dart';
@@ -49,70 +50,47 @@ class AccountView extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20.0),
-                  ElevatedButton(
-                    onPressed: () {
-                      ();
-                    },
-                    style: ButtonStyle(
-                      minimumSize: MaterialStateProperty.all(Size(
-                        MediaQuery.of(context).size.width * 0.3,
-                        50,
-                      )),
-                      backgroundColor:
-                          MaterialStateProperty.all(GlobalColor.mainColor),
-                      shape: MaterialStateProperty.all(
-                        RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      elevation: MaterialStateProperty.all(10),
-                    ),
-                    child: Text(
-                      'Ubah Password',
-                      style: GoogleFonts.poppins(
-                        textStyle: TextStyle(
-                          color: GlobalColor.textColor,
-                        ),
-                      ),
-                    ),
-                  ),
+                  // ElevatedButton(
+                  //   onPressed: () {
+                  //     // Handle change password
+                  //   },
+                  //   style: ButtonStyle(
+                  //     minimumSize: MaterialStateProperty.all(Size(
+                  //       MediaQuery.of(context).size.width * 0.3,
+                  //       50,
+                  //     )),
+                  //     backgroundColor:
+                  //         MaterialStateProperty.all(GlobalColor.mainColor),
+                  //     shape: MaterialStateProperty.all(
+                  //       RoundedRectangleBorder(
+                  //         borderRadius: BorderRadius.circular(12),
+                  //       ),
+                  //     ),
+                  //     elevation: MaterialStateProperty.all(10),
+                  //   ),
+                  //   child: Text(
+                  //     'Ubah Password',
+                  //     style: GoogleFonts.poppins(
+                  //       textStyle: TextStyle(
+                  //         color: GlobalColor.textColor,
+                  //       ),
+                  //     ),
+                  //   ),
+                  // ),
                   const SizedBox(height: 10.0),
                   ButtonLogout(
                     onPressed: () async {
-                      showDialog(
-                        context: context,
-                        builder: (BuildContext context) {
-                          return AlertDialog(
-                            title: Text('Konfirmasi Logout'),
-                            content: Text('Apakah Anda yakin ingin logout?'),
-                            actions: [
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.of(context).pop();
-                                },
-                                child: Text('Batal'),
-                              ),
-                              TextButton(
-                                onPressed: () async {
-                                  SharedPreferences prefs =
-                                      await SharedPreferences.getInstance();
-                                  prefs.remove('token');
-                                  prefs.remove(
-                                      'username'); // Hapus username saat logout
+                      SharedPreferences prefs =
+                          await SharedPreferences.getInstance();
+                      prefs.remove('token');
+                      prefs.remove('username');
+                      prefs.remove('customerSalts');
 
-                                  Navigator.of(context).pop();
-                                  Navigator.of(context).pushReplacement(
-                                    MaterialPageRoute(
-                                      builder: (context) => LoginView(),
-                                    ),
-                                  );
-                                },
-                                child: Text('Logout'),
-                              ),
-                            ],
-                          );
-                        },
-                      );
+                      PersistentNavBarNavigator.pushNewScreen(context,
+                          screen: const LoginView(),
+                          withNavBar: false,
+                          pageTransitionAnimation:
+                              PageTransitionAnimation.fade);
                     },
                   ),
                 ],

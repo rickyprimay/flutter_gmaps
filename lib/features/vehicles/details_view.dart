@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'dart:async';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:intl/intl.dart';
 import 'package:VehiLoc/core/model/response_daily.dart';
@@ -11,14 +10,20 @@ import 'package:VehiLoc/core/utils/colors.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:VehiLoc/core/Api/api_service.dart';
 import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:VehiLoc/features/vehicles/widget/custom_slider.dart';
+import 'package:VehiLoc/features/vehicles/widget/naration_widget.dart';
+import 'package:VehiLoc/features/vehicles/widget/event_widget.dart';
+import 'package:logger/logger.dart';
 
 class DetailsPageView extends StatefulWidget {
   final int vehicleId;
   final double? vehicleLat;
   final double? vehicleLon;
   final String? vehicleName;
+  final int? type;
   late int gpsdt;
   late int initialGpsdt;
+  late List<DataItem> dataItems;
 
   DetailsPageView({
     Key? key,
@@ -27,8 +32,10 @@ class DetailsPageView extends StatefulWidget {
     required this.vehicleLon,
     required this.vehicleName,
     required this.gpsdt,
+    required this.type,
   }) : super(key: key) {
     initialGpsdt = gpsdt;
+    dataItems = [];
   }
 
   @override
@@ -36,6 +43,7 @@ class DetailsPageView extends StatefulWidget {
 }
 
 class _DetailsPageViewState extends State<DetailsPageView> {
+  final Logger logger = Logger();
   final ApiService apiService = ApiService();
 
   List<Marker> stopMarkers = [];
@@ -50,7 +58,6 @@ class _DetailsPageViewState extends State<DetailsPageView> {
   late BitmapDescriptor _greenMarkerIcon;
   late BitmapDescriptor _redMarkerIcon;
   late BitmapDescriptor _greyMarkerIcon;
-  late BitmapDescriptor _arrowIcon;
 
   bool _isButtonClicked = false;
 
@@ -67,6 +74,9 @@ class _DetailsPageViewState extends State<DetailsPageView> {
 
   bool _isLoading = false;
 
+  bool _isSpeedChartVisible = true;
+  bool _isTemperatureChartVisible = true;
+
   @override
   void initState() {
     super.initState();
@@ -82,18 +92,6 @@ class _DetailsPageViewState extends State<DetailsPageView> {
 
     setMarkerIcons();
     fetchAllData();
-    fetchGeocode();
-  }
-
-  void fetchGeocode() async {
-    final double lat = -6.966667;
-    final double lon = 110.416664;
-
-    try {
-      final address = await apiService.fetchAddress(lat, lon);
-    } catch (e) {
-      print("error : $e");
-    }
   }
 
   void fetchAllData() async {
@@ -111,7 +109,7 @@ class _DetailsPageViewState extends State<DetailsPageView> {
         detailsItem = allData.isNotEmpty ? dataAll.jdetails : [];
       });
     } catch (e) {
-      print("error : $e");
+      logger.e("error : $e");
     }
   }
 
@@ -122,13 +120,10 @@ class _DetailsPageViewState extends State<DetailsPageView> {
         await getBytesFromAsset('assets/icons/arrow_red.png', 40);
     final Uint8List greyMarkerIconData =
         await getBytesFromAsset('assets/icons/arrow_gray.png', 40);
-    final Uint8List arrowIconData =
-        await getBytesFromAsset('assets/icons/arrow-point.png', 20);
 
     _greenMarkerIcon = BitmapDescriptor.fromBytes(greenMarkerIconData);
     _redMarkerIcon = BitmapDescriptor.fromBytes(redMarkerIconData);
     _greyMarkerIcon = BitmapDescriptor.fromBytes(greyMarkerIconData);
-    _arrowIcon = BitmapDescriptor.fromBytes(arrowIconData);
   }
 
   Future<Uint8List> getBytesFromAsset(String path, int width) async {
@@ -157,7 +152,7 @@ class _DetailsPageViewState extends State<DetailsPageView> {
       polylineId: polylineId,
       color: Colors.red,
       points: polylineCoordinates,
-      width: 1,
+      width: 2,
     );
 
     return Set.of([polyline]);
@@ -200,9 +195,9 @@ class _DetailsPageViewState extends State<DetailsPageView> {
         position: LatLng(detail.lat, detail.lon),
         icon: BitmapDescriptor.defaultMarker,
         infoWindow: InfoWindow(
-          title: "Pemberhentian ke ${index + 1}",
+          title: "Stop ${index + 1}",
           snippet:
-              "Di jam: ${DateFormat.Hm().format(DateTime.fromMillisecondsSinceEpoch(detail.startdt * 1000))}",
+              "Jam : ${DateFormat.Hm().format(DateTime.fromMillisecondsSinceEpoch(detail.startdt * 1000))} - ${DateFormat.Hm().format(DateTime.fromMillisecondsSinceEpoch(detail.enddt * 1000))}",
         ),
       );
     }).toList();
@@ -258,10 +253,93 @@ class _DetailsPageViewState extends State<DetailsPageView> {
     return selectedDateUtc.isBefore(maxDate);
   }
 
+  LatLng _calculatePolylineCenter() {
+    if (dailyData.isEmpty) {
+      return _initialCameraPosition;
+    }
+
+    final List<LatLng> polylineCoordinates = dailyData
+        .map((daily) => LatLng(daily.latitude, daily.longitude))
+        .toList();
+
+    double sumLat = 0.0;
+    double sumLng = 0.0;
+
+    for (LatLng coordinate in polylineCoordinates) {
+      sumLat += coordinate.latitude;
+      sumLng += coordinate.longitude;
+    }
+
+    double averageLat = sumLat / polylineCoordinates.length;
+    double averageLng = sumLng / polylineCoordinates.length;
+
+    return LatLng(averageLat, averageLng);
+  }
+
+  LatLngBounds _calculatePolylineBounds() {
+    if (dailyData.isEmpty) {
+      return LatLngBounds(
+        southwest: _initialCameraPosition,
+        northeast: _initialCameraPosition,
+      );
+    }
+
+    final List<LatLng> polylineCoordinates = dailyData
+        .map((daily) => LatLng(daily.latitude, daily.longitude))
+        .toList();
+
+    double minLat = polylineCoordinates[0].latitude;
+    double maxLat = polylineCoordinates[0].latitude;
+    double minLng = polylineCoordinates[0].longitude;
+    double maxLng = polylineCoordinates[0].longitude;
+
+    for (LatLng coordinate in polylineCoordinates) {
+      if (coordinate.latitude < minLat) minLat = coordinate.latitude;
+      if (coordinate.latitude > maxLat) maxLat = coordinate.latitude;
+      if (coordinate.longitude < minLng) minLng = coordinate.longitude;
+      if (coordinate.longitude > maxLng) maxLng = coordinate.longitude;
+    }
+
+    return LatLngBounds(
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
+    );
+  }
+
+  double _calculateZoomLevel(LatLngBounds bounds) {
+    const double padding = 50.0;
+    const double desiredWidth = 400.0;
+
+    double angle = bounds.northeast.longitude - bounds.southwest.longitude;
+    if (angle < 0) {
+      angle += 360;
+    }
+
+    double zoom = _getBoundsZoomLevel(bounds, padding, desiredWidth);
+    return zoom;
+  }
+
+  double _getBoundsZoomLevel(
+      LatLngBounds bounds, double padding, double width) {
+    double globeWidth = 256;
+    double west = bounds.southwest.longitude;
+    double east = bounds.northeast.longitude;
+    double angle = east - west;
+    if (angle < 0) {
+      angle += 360;
+    }
+
+    double zoom = ((width - padding) * 360) / (angle * globeWidth);
+    return zoom;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        iconTheme: const IconThemeData(
+          color: Colors.white,
+        ),
         title: Text(
           "${widget.vehicleName}",
           style: GoogleFonts.poppins(
@@ -280,15 +358,17 @@ class _DetailsPageViewState extends State<DetailsPageView> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  IconButton(
-                    onPressed: () {
-                      setState(() {
-                        _selectedDate =
-                            _selectedDate.subtract(const Duration(days: 1));
-                        _updateStartEpoch();
-                      });
-                    },
-                    icon: const Icon(Icons.arrow_back),
+                  Expanded(
+                    child: IconButton(
+                      onPressed: () {
+                        setState(() {
+                          _selectedDate =
+                              _selectedDate.subtract(const Duration(days: 1));
+                          _updateStartEpoch();
+                        });
+                      },
+                      icon: const Icon(Icons.arrow_back),
+                    ),
                   ),
                   Container(
                     decoration: BoxDecoration(
@@ -305,23 +385,25 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                         _selectDate(context);
                       },
                       child: Text(
-                        '${_selectedDate.day} ${DateFormat.MMMM().format(_selectedDate)}, ${_selectedDate.year}',
+                        '${_selectedDate.day} ${DateFormat.MMM().format(_selectedDate)}, ${_selectedDate.year}',
                         style: GoogleFonts.poppins(
                             fontSize: 16, color: GlobalColor.textColor),
                       ),
                     ),
                   ),
-                  IconButton(
-                    onPressed: _isForwardButtonEnabled()
-                        ? () {
-                            setState(() {
-                              _selectedDate =
-                                  _selectedDate.add(const Duration(days: 1));
-                              _updateStartEpoch();
-                            });
-                          }
-                        : null,
-                    icon: const Icon(Icons.arrow_forward),
+                  Expanded(
+                    child: IconButton(
+                      onPressed: _isForwardButtonEnabled()
+                          ? () {
+                              setState(() {
+                                _selectedDate =
+                                    _selectedDate.add(const Duration(days: 1));
+                                _updateStartEpoch();
+                              });
+                            }
+                          : null,
+                      icon: const Icon(Icons.arrow_forward),
+                    ),
                   )
                 ],
               ),
@@ -417,15 +499,21 @@ class _DetailsPageViewState extends State<DetailsPageView> {
               ],
             ),
             SizedBox(
-              height: MediaQuery.of(context).size.height * 0.7,
+              height: MediaQuery.of(context).size.height * 0.71,
               child: Builder(
                 builder: (context) {
                   return _selectedTabIndex == 0
                       ? _buildMapWidget()
                       : _selectedTabIndex == 1
-                          ? _buildNarationWidget()
+                          ? NarationWidget(
+                              narationData: detailsItem,
+                              fetchNarationData: () => fetchNarationData(),
+                            )
                           : _selectedTabIndex == 2
-                              ? _buildEventWidget()
+                              ? EventWidget(
+                                  eventData: inputData,
+                                  fetchEventData: () => fetchEventData(),
+                                )
                               : _buildChartWidget();
                 },
               ),
@@ -450,7 +538,13 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                 child: Container(
                   width: double.infinity,
                   height: double.infinity,
-                  color: Colors.grey[300],
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Colors.grey[300]!, Colors.grey[100]!],
+                    ),
+                  ),
                   child: const Center(
                     child: Text(
                       'Data tidak ada',
@@ -488,31 +582,32 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                             onPressed: () {},
                           ),
                           Text(
-                            '${_getSpeedForSliderValue(_sliderValue)} KM/H',
+                            '${_getSpeedForSliderValue(_sliderValue)} kmh',
                             style: GoogleFonts.poppins(),
                           ),
                         ],
                       ),
-                      Column(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.thermostat,
-                                size: 30, color: Colors.black),
-                            onPressed: () {},
-                          ),
-                          Text(
-                            '${_getTemperatureForSliderValue(_sliderValue)}°',
-                            style: GoogleFonts.poppins(),
-                          ),
-                        ],
-                      ),
+                      if (widget.type == 4)
+                        Column(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.thermostat,
+                                  size: 30, color: Colors.black),
+                              onPressed: () {},
+                            ),
+                            Text(
+                              '${_getTemperatureForSliderValue(_sliderValue)}°',
+                              style: GoogleFonts.poppins(),
+                            ),
+                          ],
+                        ),
                     ],
                   ),
                   Expanded(
                     child: GoogleMap(
                       initialCameraPosition: CameraPosition(
-                        target: _initialCameraPosition,
-                        zoom: 8,
+                        target: _calculatePolylineCenter(),
+                        zoom: 12,
                       ),
                       markers: _createMarkers(_sliderValue),
                       polylines: _createPolylines(),
@@ -520,187 +615,71 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                         setState(() {
                           _mapController = controller;
                         });
-                        _updateCameraPosition(_sliderValue);
+
+                        LatLngBounds bounds = _calculatePolylineBounds();
+                        Timer(const Duration(milliseconds: 2000), () {
+                          _mapController.animateCamera(
+                            CameraUpdate.newLatLngBounds(bounds, 50),
+                          );
+                        });
                       },
                     ),
                   ),
-                  SizedBox(
-                    height: 100,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Slider(
-                        value: _sliderValue,
-                        min: 0,
-                        max: 100,
-                        onChanged: (newValue) {
-                          setState(() {
-                            _sliderValue = newValue;
-                            _updateCameraPosition(newValue);
-                          });
-                        },
-                        activeColor: Colors.black,
-                        inactiveColor: Colors.black,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 30),
+                    child: SizedBox(
+                      height: 70,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.topRight,
+                            colors: [
+                              for (var dataItem in dailyData)
+                                dataItem.colorBox == 'white'
+                                    ? Colors.grey[300]!
+                                    : dataItem.colorBox == 'green'
+                                        ? Colors.green
+                                        : dataItem.colorBox == 'yellow'
+                                            ? Colors.yellow
+                                            : Colors.red,
+                            ],
+                          ),
+                        ),
+                        child: SliderTheme(
+                          data: SliderThemeData(
+                            trackHeight: 8,
+                            thumbShape: const RoundSliderThumbShape(
+                                enabledThumbRadius: 10),
+                            overlayShape: const RoundSliderOverlayShape(
+                                overlayRadius: 20),
+                            valueIndicatorShape:
+                                const PaddleSliderValueIndicatorShape(),
+                            valueIndicatorTextStyle: const TextStyle(
+                              color: Colors.black,
+                            ),
+                            trackShape: CustomTrackShape(),
+                          ),
+                          child: Slider(
+                            value: _sliderValue,
+                            min: 0,
+                            max: 100,
+                            onChanged: (newValue) {
+                              setState(() {
+                                _sliderValue = newValue;
+                                _updateCameraPosition(newValue);
+                              });
+                            },
+                            activeColor: Colors.black,
+                            inactiveColor: Colors.black,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                  )
                 ],
               );
-  }
-
-  Widget _buildNarationWidget() {
-    return FutureBuilder<List<JdetailsItem>>(
-      future: fetchNarationData(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        } else if (snapshot.hasError) {
-          return const Center(child: Text('Data tidak ada'));
-        } else {
-          if (snapshot.data == null || snapshot.data!.isEmpty) {
-            return const Center(child: Text('Data Narasi tidak ada'));
-          } else {
-            return SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.vertical,
-                child: Container(
-                  width: MediaQuery.of(context).size.width,
-                  child: DataTable(
-                    columnSpacing: 20,
-                    headingTextStyle:
-                        const TextStyle(fontWeight: FontWeight.bold),
-                    columns: const [
-                      DataColumn(
-                        label: Text('Waktu',
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Poppins')),
-                      ),
-                      DataColumn(
-                        label: Text('Narasi',
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Poppins')),
-                      ),
-                    ],
-                    rows: snapshot.data!.map((item) {
-                      return DataRow(cells: [
-                        DataCell(Text(
-                          '${_formatTime(item.startdt)} - ${_formatTime(item.enddt)}            ',
-                          style: const TextStyle(
-                              fontSize: 18, fontFamily: 'Poppins'),
-                        )),
-                        DataCell(Text(
-                          '${formatNaration(item)}',
-                          style: const TextStyle(
-                              fontSize: 18, fontFamily: 'Poppins'),
-                        )),
-                      ]);
-                    }).toList(),
-                  ),
-                ),
-              ),
-            );
-          }
-        }
-      },
-    );
-  }
-
-  String _formatTime(int timestamp) {
-    return DateFormat.Hm()
-        .format(DateTime.fromMillisecondsSinceEpoch(timestamp * 1000));
-  }
-
-  String formatNaration(JdetailsItem item) {
-    if (item.type == 1) {
-      String duration = _formatDuration(item.enddt - item.startdt);
-      return 'Stopped $duration';
-    } else if (item.type == 2) {
-      double distanceKm = item.distance / 1000;
-      return 'Moved ${distanceKm.toStringAsFixed(2)} km for ${_formatDuration(item.enddt - item.startdt)}';
-    } else {
-      return 'Unknown event';
-    }
-  }
-
-  String _formatDuration(int durationSeconds) {
-    int hours = durationSeconds ~/ 3600;
-    int minutes = (durationSeconds % 3600) ~/ 60;
-    if (hours > 0) {
-      return '$hours hr ${minutes} mins';
-    } else {
-      return '${minutes} mins';
-    }
-  }
-
-  Widget _buildEventWidget() {
-    return FutureBuilder<List<InputLogsItem>>(
-      future: fetchEventData(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        } else if (snapshot.hasError) {
-          return const Center(child: Text('Data tidak ada'));
-        } else {
-          if (snapshot.data == null || snapshot.data!.isEmpty) {
-            return const Center(child: Text('Data Event tidak ada'));
-          } else {
-            return SingleChildScrollView(
-              scrollDirection: Axis.vertical,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Container(
-                  width: MediaQuery.of(context).size.width,
-                  child: DataTable(
-                    columnSpacing: 20,
-                    headingTextStyle:
-                        const TextStyle(fontWeight: FontWeight.bold),
-                    columns: const [
-                      DataColumn(
-                        label: Text('Waktu',
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Poppins')),
-                      ),
-                      DataColumn(
-                        label: Text('Event',
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Poppins')),
-                      ),
-                    ],
-                    rows: snapshot.data!.map((item) {
-                      return DataRow(cells: [
-                        DataCell(Text(
-                          DateFormat.Hm().format(
-                              DateTime.fromMillisecondsSinceEpoch(
-                                  item.dt * 1000)),
-                          style: const TextStyle(
-                              fontSize: 18, fontFamily: 'Poppins'),
-                        )),
-                        DataCell(Text(
-                          '${item.sensorName} was ${item.newStateDesc}',
-                          style: const TextStyle(
-                              fontSize: 18, fontFamily: 'Poppins'),
-                        )),
-                      ]);
-                    }).toList(),
-                  ),
-                ),
-              ),
-            );
-          }
-        }
-      },
-    );
   }
 
   Widget _buildChartWidget() {
@@ -727,80 +706,96 @@ class _DetailsPageViewState extends State<DetailsPageView> {
           List<DataItem> chartData = snapshot.data!;
           return Column(
             children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  // scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    width: 1200,
-                    height: 600,
-                    child: SfCartesianChart(
-                      key: _cartesianChartKey,
-                      title: ChartTitle(
-                        text:
-                            'Grafik Suhu dan Kecepatan ${widget.vehicleName} | ${_selectedDate.day} ${DateFormat.MMMM().format(_selectedDate)}, ${_selectedDate.year}',
-                        textStyle: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.bold,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Checkbox(
+                    value: _isSpeedChartVisible,
+                    onChanged: (value) {
+                      setState(() {
+                        _isSpeedChartVisible = value!;
+                      });
+                    },
+                  ),
+                  Text('Show Speed Chart'),
+                  if (widget.type == 4)
+                    Checkbox(
+                      value: _isTemperatureChartVisible,
+                      onChanged: (value) {
+                        setState(() {
+                          _isTemperatureChartVisible = value!;
+                        });
+                      },
+                    ),
+                  if (widget.type == 4) Text('Show Temp Chart'),
+                ],
+              ),
+              if (_isSpeedChartVisible ||
+                  (_isTemperatureChartVisible && widget.type == 4)) ...[
+                Expanded(
+                  child: SingleChildScrollView(
+                    // scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: 1200,
+                      height: 600,
+                      child: SfCartesianChart(
+                        key: _cartesianChartKey,
+                        title: ChartTitle(
+                          text:
+                              '${_isTemperatureChartVisible && widget.type == 4 ? 'Grafik Suhu' : ''}'
+                              '${_isTemperatureChartVisible && _isSpeedChartVisible ? ' dan ' : ''}'
+                              '${_isSpeedChartVisible ? 'Grafik Kecepatan' : ''}'
+                              ' \n ${widget.vehicleName} \n ${_selectedDate.day} ${DateFormat.MMM().format(_selectedDate)}, ${_selectedDate.year}',
+                          textStyle: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                      tooltipBehavior: TooltipBehavior(enable: true),
-                      series: <LineSeries<DataItem, DateTime>>[
-                        LineSeries<DataItem, DateTime>(
-                          dataSource: chartData,
-                          xValueMapper: (DataItem data, _) =>
-                              DateTime.fromMillisecondsSinceEpoch(
-                                  data.gpsdt * 1000),
-                          yValueMapper: (DataItem data, _) =>
-                              data.speed.toDouble(),
+                        tooltipBehavior: TooltipBehavior(enable: true),
+                        series: <LineSeries<DataItem, DateTime>>[
+                          if (_isSpeedChartVisible)
+                            LineSeries<DataItem, DateTime>(
+                              dataSource: chartData,
+                              xValueMapper: (DataItem data, _) =>
+                                  DateTime.fromMillisecondsSinceEpoch(
+                                      data.gpsdt * 1000),
+                              yValueMapper: (DataItem data, _) =>
+                                  data.speed.toDouble(),
+                              name: 'Kecepatan',
+                              color: Colors.orange[300],
+                              yAxisName: 'Kecepatan',
+                              width: 1,
+                              legendItemText: 'Speed (kmh)',
+                            ),
+                          if (_isTemperatureChartVisible && widget.type == 4)
+                            LineSeries<DataItem, DateTime>(
+                              dataSource: chartData,
+                              xValueMapper: (DataItem data, _) =>
+                                  DateTime.fromMillisecondsSinceEpoch(
+                                      data.gpsdt * 1000),
+                              yValueMapper: (DataItem data, _) =>
+                                  data.temp / 10,
+                              name: 'Suhu',
+                              color: Colors.blue[700],
+                              yAxisName: 'Suhu',
+                              width: 1,
+                              legendIconType: LegendIconType.horizontalLine,
+                              legendItemText: 'Temp (°C)',
+                            ),
+                        ],
+                        primaryXAxis: DateTimeAxis(
+                          title: const AxisTitle(
+                            text: 'Waktu',
+                            textStyle: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          dateFormat: DateFormat.Hm(),
+                        ),
+                        primaryYAxis: const NumericAxis(
+                          opposedPosition: true,
                           name: 'Kecepatan',
-                          color: Colors.orange[300],
-                          yAxisName: 'Kecepatan',
-                          width: 1,
-                          legendItemText: 'Kecepatan (KM/H)',
-                        ),
-                        LineSeries<DataItem, DateTime>(
-                          dataSource: chartData,
-                          xValueMapper: (DataItem data, _) =>
-                              DateTime.fromMillisecondsSinceEpoch(
-                                  data.gpsdt * 1000),
-                          yValueMapper: (DataItem data, _) => data.temp / 10,
-                          name: 'Suhu',
-                          color: Colors.blue[700],
-                          yAxisName: 'Suhu',
-                          width: 1,
-                          legendIconType: LegendIconType.horizontalLine,
-                          legendItemText: 'Suhu (°C)',
-                        ),
-                      ],
-                      primaryXAxis: DateTimeAxis(
-                        title: const AxisTitle(
-                          text: 'Waktu',
-                          textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        dateFormat: DateFormat.Hm(),
-                        majorGridLines: MajorGridLines(width: 0),
-                        intervalType: DateTimeIntervalType.hours,
-                        interval: 1,
-                      ),
-                      primaryYAxis: const NumericAxis(
-                        opposedPosition: true,
-                        name: 'Kecepatan',
-                        title: AxisTitle(
-                          textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        minimum: 0,
-                        interval: 20,
-                      ),
-                      axes: const <ChartAxis>[
-                        NumericAxis(
-                          name: 'Suhu',
-                          opposedPosition: false,
                           title: AxisTitle(
                             textStyle: TextStyle(
                               fontFamily: 'Poppins',
@@ -808,20 +803,34 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                             ),
                           ),
                           minimum: 0,
-                          interval: 10,
+                          interval: 20,
                         ),
-                      ],
-                      legend: const Legend(
-                        isVisible: true,
-                        textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15),
+                        axes: const <ChartAxis>[
+                          NumericAxis(
+                            name: 'Suhu',
+                            opposedPosition: false,
+                            title: AxisTitle(
+                              textStyle: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            minimum: 0,
+                            interval: 10,
+                          ),
+                        ],
+                        legend: const Legend(
+                          isVisible: true,
+                          textStyle: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
+              ],
               ElevatedButton(
                 onPressed: () {
                   _renderChartAsImage(context);
@@ -871,11 +880,11 @@ class _DetailsPageViewState extends State<DetailsPageView> {
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder,
-        Rect.fromPoints(const Offset(0.0, 0.0), const Offset(3600.0, 1808.0)));
+        Rect.fromPoints(const Offset(0.0, 0.0), const Offset(1220.0, 1720.0)));
     canvas.drawColor(GlobalColor.textColor, BlendMode.dstOver);
     canvas.drawImage(data!, Offset.zero, Paint());
     final ui.Image finalImage =
-        await recorder.endRecording().toImage(3600, 1808);
+        await recorder.endRecording().toImage(1220, 1720);
 
     final ByteData? bytes =
         await finalImage.toByteData(format: ui.ImageByteFormat.png);
@@ -886,6 +895,7 @@ class _DetailsPageViewState extends State<DetailsPageView> {
 
     Navigator.of(context).pop();
 
+    // ignore: use_build_context_synchronously
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -973,7 +983,7 @@ class _DetailsPageViewState extends State<DetailsPageView> {
         stopMarkers.addAll(updatedStopMarkers);
       });
     } catch (e) {
-      print("error : $e");
+      logger.e("error : $e");
     } finally {
       setState(() {
         _isLoading = false;
@@ -1027,8 +1037,8 @@ class _DetailsPageViewState extends State<DetailsPageView> {
 
       return dataAll.inputlogs;
     } catch (e) {
-      print("error : $e");
-      throw e;
+      logger.e("error : $e");
+      rethrow;
     }
   }
 
@@ -1042,8 +1052,8 @@ class _DetailsPageViewState extends State<DetailsPageView> {
 
       return dataAll.jdetails;
     } catch (e) {
-      print("error : $e");
-      throw e;
+      logger.e("error : $e");
+      rethrow;
     }
   }
 
@@ -1057,8 +1067,8 @@ class _DetailsPageViewState extends State<DetailsPageView> {
 
       return dataAll.data;
     } catch (e) {
-      print("error : $e");
-      throw e;
+      logger.e("error : $e");
+      rethrow;
     }
   }
 }

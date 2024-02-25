@@ -15,7 +15,6 @@ dependencies:
   connectivity_plus: ^5.0.2
   label_marker: ^1.0.1
   shared_preferences: ^2.2.2
-  flutter_hooks: ^0.20.4
   flutter_svg: ^2.0.9
   google_fonts: ^6.1.0
   hexcolor: ^3.0.1
@@ -30,6 +29,8 @@ dependencies:
   syncfusion_flutter_charts: ^24.2.3+1
   image_gallery_saver: ^2.0.3
   flutter_launcher_icons: "^0.13.1"
+  persistent_bottom_nav_bar: ^5.0.2
+  provider: ^6.1.1
 
 flutter_launcher_icons:
   android: "launcher_icon"
