@@ -58,10 +58,46 @@ class DataItem {
   static String _calculateColorBox(int speed) {
     if (speed == 0) {
       return 'white';
-    } else if (speed >= 5 && speed <= 60) {
-      return 'green';
-    } else if (speed >= 61 && speed <= 100 ){
-      return 'yellow';
+    } else if (speed >= 5 && speed <= 10) {
+      return 'green1';
+    } else if (speed >= 11 && speed <= 15) {
+      return 'green2';
+    } else if (speed >= 16 && speed <= 20){
+      return 'green3';
+    } else if (speed >= 16 && speed <= 20){
+      return 'green4';
+    } else if (speed >= 21 && speed <= 25){
+      return 'green5';
+    } else if (speed >= 26 && speed <= 30){
+      return 'green6';
+    } else if (speed >= 31 && speed <= 35){
+      return 'green7';
+    } else if (speed >= 36 && speed <= 40){
+      return 'green8';
+    } else if (speed >= 41 && speed <= 45){
+      return 'green9';
+    } else if (speed >= 46 && speed <= 50){
+      return 'green10';
+    } else if (speed >= 51 && speed <= 55){
+      return 'green11';
+    } else if (speed >= 56 && speed <= 60){
+      return 'green12';
+    } else if (speed >= 61 && speed <= 65){
+      return 'yellow1';
+    } else if (speed >= 66 && speed <= 70){
+      return 'yellow2';
+    } else if (speed >= 71 && speed <= 75){
+      return 'yellow3';
+    } else if (speed >= 76 && speed <= 80){
+      return 'yellow4';
+    } else if (speed >= 81 && speed <= 85){
+      return 'yellow5';
+    } else if (speed >= 86 && speed <= 90){
+      return 'yellow6';
+    } else if (speed >= 91 && speed <= 95){
+      return 'yellow7';
+    } else if (speed >= 96 && speed <= 100 ){
+      return 'yellow8';
     } else {
       return 'red';
     }

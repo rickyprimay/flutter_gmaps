@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:VehiLoc/core/utils/colors.dart';
 import 'package:VehiLoc/features/auth/widget/form_login.dart';
-import 'package:VehiLoc/features/map/widget/BottomBar.dart';
+import 'package:VehiLoc/features/map/widget/bottom_bar.dart';
 import 'package:logger/logger.dart';
 
 class LoginView extends StatefulWidget {
@@ -14,6 +14,10 @@ class LoginView extends StatefulWidget {
 
   @override
   _LoginViewState createState() => _LoginViewState();
+}
+
+class LoginState {
+  static String userSalt = "";
 }
 
 class _LoginViewState extends State<LoginView> {
@@ -38,6 +42,7 @@ class _LoginViewState extends State<LoginView> {
         context,
         MaterialPageRoute(builder: (context) => BottomBar()),
       );
+      LoginState.userSalt = prefs.getString("customerSalts")!;
     } else {
       _fetchAndCacheCustomerSalts();
     }
@@ -61,6 +66,7 @@ class _LoginViewState extends State<LoginView> {
 
         if (response.statusCode == 200) {
           prefs.setString('customerSalts', response.body);
+          LoginState.userSalt = response.body;
           logger.i('Customer Salts = ${response.body}');
         } else {
           logger.e(

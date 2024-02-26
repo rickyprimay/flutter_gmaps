@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:VehiLoc/core/utils/colors.dart';
 import 'package:VehiLoc/features/account/widget/button_logout.dart';
 import 'package:VehiLoc/features/auth/login/login_view.dart';
+import 'package:VehiLoc/core/Api/websocket.dart';
 
 class AccountView extends StatelessWidget {
   const AccountView({Key? key});
@@ -50,47 +51,46 @@ class AccountView extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20.0),
-                  // ElevatedButton(
-                  //   onPressed: () {
-                  //     // Handle change password
-                  //   },
-                  //   style: ButtonStyle(
-                  //     minimumSize: MaterialStateProperty.all(Size(
-                  //       MediaQuery.of(context).size.width * 0.3,
-                  //       50,
-                  //     )),
-                  //     backgroundColor:
-                  //         MaterialStateProperty.all(GlobalColor.mainColor),
-                  //     shape: MaterialStateProperty.all(
-                  //       RoundedRectangleBorder(
-                  //         borderRadius: BorderRadius.circular(12),
-                  //       ),
-                  //     ),
-                  //     elevation: MaterialStateProperty.all(10),
-                  //   ),
-                  //   child: Text(
-                  //     'Ubah Password',
-                  //     style: GoogleFonts.poppins(
-                  //       textStyle: TextStyle(
-                  //         color: GlobalColor.textColor,
-                  //       ),
-                  //     ),
-                  //   ),
-                  // ),
-                  const SizedBox(height: 10.0),
                   ButtonLogout(
                     onPressed: () async {
-                      SharedPreferences prefs =
-                          await SharedPreferences.getInstance();
-                      prefs.remove('token');
-                      prefs.remove('username');
-                      prefs.remove('customerSalts');
+                      bool logoutConfirmed = await showDialog(
+                        context: context,
+                        builder: (BuildContext context) {
+                          return AlertDialog(
+                            title: Text("Konfirmasi Logout"),
+                            content: Text("Apakah Anda yakin untuk logout?"),
+                            actions: <Widget>[
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.of(context).pop(false);
+                                },
+                                child: Text("Batal"),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.of(context).pop(true);
+                                },
+                                child: Text("Ya"),
+                              ),
+                            ],
+                          );
+                        },
+                      );
 
-                      PersistentNavBarNavigator.pushNewScreen(context,
-                          screen: const LoginView(),
-                          withNavBar: false,
-                          pageTransitionAnimation:
-                              PageTransitionAnimation.fade);
+                      if (logoutConfirmed == true) {
+                        SharedPreferences prefs =
+                            await SharedPreferences.getInstance();
+                        prefs.remove('token');
+                        prefs.remove('username');
+                        prefs.remove('customerSalts');
+                        WebSocketProvider.dispose();
+
+                        PersistentNavBarNavigator.pushNewScreen(context,
+                            screen: const LoginView(),
+                            withNavBar: false,
+                            pageTransitionAnimation:
+                                PageTransitionAnimation.fade);
+                      }
                     },
                   ),
                 ],

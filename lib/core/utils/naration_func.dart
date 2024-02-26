@@ -2,8 +2,7 @@ import 'package:intl/intl.dart';
 import 'package:VehiLoc/core/model/response_daily.dart';
 
 String formatTime(int timestamp) {
-  return DateFormat.Hm()
-      .format(DateTime.fromMillisecondsSinceEpoch(timestamp * 1000));
+  return DateFormat.Hm().format(DateTime.fromMillisecondsSinceEpoch(timestamp * 1000));
 }
 
 String formatNaration(JdetailsItem item) {

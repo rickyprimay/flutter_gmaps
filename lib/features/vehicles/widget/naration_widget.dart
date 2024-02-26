@@ -9,11 +9,16 @@ class NarationWidget extends StatefulWidget {
   final ApiService apiService = ApiService();
   final List<JdetailsItem> narationData;
   final Future<List<JdetailsItem>> Function() fetchNarationData;
+  final void Function(double lat, double lon)? onMapButtonPressed;
+
+  double? selectedLatitude;
+  double? selectedLongitude;
 
   NarationWidget({
     Key? key,
     required this.narationData,
     required this.fetchNarationData,
+    this.onMapButtonPressed,
   }) : super(key: key);
 
   @override
@@ -36,8 +41,6 @@ class _NarationWidgetState extends State<NarationWidget> {
           child: DataTable(
             columnSpacing: 20,
             headingTextStyle: const TextStyle(fontWeight: FontWeight.bold),
-            dataRowMinHeight: 100,
-            dataRowMaxHeight: 100,
             columns: const [
               DataColumn(
                 label: Text('Waktu',
@@ -58,60 +61,94 @@ class _NarationWidgetState extends State<NarationWidget> {
               final buttonPressed = buttonPressedMap[item.startdt] ?? false;
               final address = addresses[item.startdt] ?? '';
 
-              return DataRow(cells: [
-                DataCell(
-                  Text(
-                    '${formatTime(item.startdt)} - ${formatTime(item.enddt)}             ',
-                    style: const TextStyle(fontSize: 18, fontFamily: 'Poppins'),
+              return DataRow(
+                cells: [
+                  DataCell(
+                    Text(
+                      '${formatTime(item.startdt)} - ${formatTime(item.enddt)}         ',
+                      style: const TextStyle(fontSize: 16, fontFamily: 'Poppins'),
+                    ),
                   ),
-                ),
-                DataCell(
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              formatNaration(item),
-                              style: const TextStyle(
-                                  fontSize: 18, fontFamily: 'Poppins'),
-                            ),
-                            if (item.type == 1)
-                              buttonPressed
-                                  ? Text(
-                                      address,
-                                      style: const TextStyle(
-                                          fontSize: 18, fontFamily: 'Poppins'),
-                                    )
-                                  : TextButton(
-                                      onPressed: () async {
-                                        if (addresses[item.startdt] == null) {
-                                          final _address = await fetchGeocode(
-                                              item.lat, item.lon);
-                                          setState(() {
-                                            buttonPressedMap[item.startdt] =
-                                                true;
-                                            addresses[item.startdt] = _address;
-                                          });
-                                          widget.logger.i('Alamat: $_address');
-                                        }
-                                      },
-                                      child: const Text(
-                                        'Show',
-                                        style: TextStyle(
-                                            fontSize: 18,
-                                            fontFamily: 'Poppins',
-                                            color: Colors.blue),
-                                      ),
+                  DataCell(
+                    item.type == 1
+                        ? TableRowInkWell(
+                            onTap: () async {
+                              if (addresses[item.startdt] == null) {
+                                final _address =
+                                    await fetchGeocode(item.lat, item.lon);
+                                setState(() {
+                                  buttonPressedMap[item.startdt] = true;
+                                  addresses[item.startdt] = _address;
+                                });
+                                // widget.logger.i('Alamat: $_address');
+                              }
+                            },
+                            child: IntrinsicHeight(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment
+                                    .spaceBetween, // Set to align items at the beginning and end
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          formatNaration(item),
+                                          style: const TextStyle(
+                                              fontSize: 16,
+                                              fontFamily: 'Poppins'),
+                                        ),
+                                        if (buttonPressed)
+                                          FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: Text(
+                                              address,
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                fontFamily: 'Poppins',
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
-                          ],
-                        ),
-                      ),
-                    ],
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.map),
+                                    onPressed: () {
+                                      widget.onMapButtonPressed
+                                          ?.call(item.lat, item.lon);
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : IntrinsicHeight(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        formatNaration(item),
+                                        style: const TextStyle(
+                                            fontSize: 16,
+                                            fontFamily: 'Poppins'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                   ),
-                ),
-              ]);
+                ],
+              );
             }).toList(),
           ),
         ),
@@ -124,7 +161,7 @@ class _NarationWidgetState extends State<NarationWidget> {
       final _address = await widget.apiService.fetchAddress(lat, lon);
       return _address;
     } catch (e) {
-      widget.logger.e("Error fetching address: $e");
+      // widget.logger.e("Error fetching address: $e");
       return "";
     }
   }

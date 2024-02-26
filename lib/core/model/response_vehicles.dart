@@ -66,6 +66,16 @@ class Vehicle {
     }
     return data;
   }
+
+  void merge(Vehicle newVehicle) {
+    baseMcc = newVehicle.baseMcc;
+    speed = newVehicle.speed;
+    sensors = newVehicle.sensors;
+    lat = newVehicle.lat;
+    lon = newVehicle.lon;
+    gpsdt = newVehicle.gpsdt;
+    bearing = newVehicle.bearing;
+  }
 }
 
 class Sensor {

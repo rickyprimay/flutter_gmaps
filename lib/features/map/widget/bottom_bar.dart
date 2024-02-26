@@ -28,10 +28,6 @@ class _BottomBarState extends State<BottomBar> {
   void initState() {
     super.initState();
     _controller = PersistentTabController(initialIndex: currentIndex);
-    print('hahah : ${widget.lat} ${widget.lon}');
-    if (widget.lat == null || widget.lon == null) {
-      print('tidak ada');
-    }
     _navScreens = [
       MapScreen(lat: widget.lat, lon: widget.lon),
       const VehicleView(),
@@ -54,8 +50,7 @@ class _BottomBarState extends State<BottomBar> {
         inactiveColorPrimary: GlobalColor.buttonColor,
         textStyle: GoogleFonts.poppins(
           fontWeight: FontWeight.bold,
-          color:
-              currentIndex == 0 ? GlobalColor.textColor : GlobalColor.textColor,
+          color: currentIndex == 0 ? GlobalColor.textColor : GlobalColor.textColor,
         ),
       ),
       PersistentBottomNavBarItem(
@@ -71,8 +66,7 @@ class _BottomBarState extends State<BottomBar> {
         inactiveColorPrimary: GlobalColor.buttonColor,
         textStyle: GoogleFonts.poppins(
           fontWeight: FontWeight.bold,
-          color:
-              currentIndex == 1 ? GlobalColor.textColor : GlobalColor.textColor,
+          color: currentIndex == 1 ? GlobalColor.textColor : GlobalColor.textColor,
         ),
       ),
       PersistentBottomNavBarItem(
@@ -88,8 +82,7 @@ class _BottomBarState extends State<BottomBar> {
         inactiveColorPrimary: GlobalColor.buttonColor,
         textStyle: GoogleFonts.poppins(
           fontWeight: FontWeight.bold,
-          color:
-              currentIndex == 2 ? GlobalColor.textColor : GlobalColor.textColor,
+          color: currentIndex == 2 ? GlobalColor.textColor : GlobalColor.textColor,
         ),
       ),
     ];

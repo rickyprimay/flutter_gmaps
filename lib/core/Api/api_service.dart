@@ -20,7 +20,7 @@ class ApiService {
       final String password = prefs.getString('password') ?? "";
 
       if (username.isEmpty || password.isEmpty) {
-        logger.e("Username or password not found");
+        // logger.e("Username or password not found");
         return [];
       }
 
@@ -38,14 +38,14 @@ class ApiService {
             .map((vehicleJson) => Vehicle.fromJson(vehicleJson))
             .cast<Vehicle>()
             .toList();
-        logger.i("Vehicle response: $jsonResponse");
+        // logger.i("Vehicle response: $jsonResponse");
         return vehicles;
       } else {
-        logger.e("API request failed with status code: ${response.statusCode}");
+        // logger.e("API request failed with status code: ${response.statusCode}");
         return [];
       }
     } catch (e) {
-      logger.e("Error during API request: $e");
+      // logger.e("Error during API request: $e");
       return [];
     }
   }
@@ -61,7 +61,7 @@ class ApiService {
       final String password = prefs.getString('password') ?? "";
 
       if (username.isEmpty || password.isEmpty) {
-        logger.e("Username or password not found");
+        // logger.e("Username or password not found");
       }
 
       final String basicAuth =
@@ -74,7 +74,7 @@ class ApiService {
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> jsonResponse = json.decode(response.body);
-        logger.i("Vehicle Daily Response: $jsonResponse");
+        // logger.i("Vehicle Daily Response: $jsonResponse");
         return Data.fromJson(jsonResponse);
       } else {
         throw Exception('Failed to load data from API');
@@ -94,7 +94,7 @@ class ApiService {
       final String password = prefs.getString('password') ?? "";
 
       if (username.isEmpty || password.isEmpty) {
-        logger.e("Username or password not found");
+        // logger.e("Username or password not found");
         return [];
       }
 
@@ -112,14 +112,14 @@ class ApiService {
             .map((geofenceJson) => Geofences.fromJson(geofenceJson))
             .cast<Geofences>()
             .toList();
-        logger.i("Geofences response: $jsonResponse");
+        // logger.i("Geofences response: $jsonResponse");
         return geofences;
       } else {
-        logger.e("API request failed with status code: ${response.statusCode}");
+        // logger.e("API request failed with status code: ${response.statusCode}");
         return [];
       }
     } catch (e) {
-      logger.e("Error during API request: $e");
+      // logger.e("Error during API request: $e");
       return [];
     }
   }
@@ -134,7 +134,7 @@ class ApiService {
       final String password = prefs.getString('password') ?? "";
 
       if (username.isEmpty || password.isEmpty) {
-        logger.e("Username or password not found");
+        // logger.e("Username or password not found");
         return "";
       }
 
@@ -148,14 +148,14 @@ class ApiService {
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> jsonResponse = json.decode(response.body);
-        logger.i("Address result : $jsonResponse");
+        // logger.i("Address result : $jsonResponse");
         return jsonResponse['address'];
       } else {
-        logger.e("API request failed with status code: ${response.statusCode}");
+        // logger.e("API request failed with status code: ${response.statusCode}");
         return "";
       }
     } catch (e) {
-      logger.e("Error during API request: $e");
+      // logger.e("Error during API request: $e");
       return "";
     }
   }

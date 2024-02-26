@@ -1,4 +1,4 @@
-import 'package:VehiLoc/features/map/widget/BottomBar.dart';
+import 'package:VehiLoc/features/map/widget/bottom_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -10,6 +10,7 @@ import 'package:VehiLoc/core/Api/api_service.dart';
 import 'package:VehiLoc/features/vehicles/details_view.dart';
 import 'package:logger/logger.dart';
 import 'package:persistent_bottom_nav_bar/persistent_tab_view.dart';
+import 'package:VehiLoc/core/Api/websocket.dart';
 
 class VehicleView extends StatefulWidget {
   const VehicleView({Key? key}) : super(key: key);
@@ -27,6 +28,18 @@ class _VehicleViewState extends State<VehicleView> {
   bool _isLoading = false;
   final Map<Vehicle, String> _vehicleToAddress = {};
 
+  void realtimeHandler(Vehicle vehicle) {
+    for (var current in _allVehicles) {
+      if (current.vehicleId == vehicle.vehicleId) {
+        setState(() {
+          current.merge(vehicle);
+          // logger.i('WebSocket message vehicle: ${current.customerName} ${current.plateNo}');
+        });
+        break;
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -34,11 +47,38 @@ class _VehicleViewState extends State<VehicleView> {
     _allVehicles = [];
     _groupedVehicles = {};
     _fetchData();
+    WebSocketProvider.subscribe(realtimeHandler);
+    logger.i("Vehicle subscribe websocket");
+    // final Logger logger = Logger();
+    // WebSocketChannel channel = connectToWebSocket(LoginState.userSalt);
+
+    // channel.stream.listen(
+    //   (message) {
+    //     var vehicleRaw = json.decode(message);
+    //     Vehicle vehicle = Vehicle.fromJson(vehicleRaw);
+    //     for (var current in _allVehicles) {
+    //       if (current.vehicleId == vehicle.vehicleId) {
+    //         setState(() {
+    //           current.merge(vehicle);
+    //           logger.i('WebSocket message: ' + current.customerName.toString() + current.plateNo.toString());
+    //         });
+    //         break;
+    //       }
+    //     }
+    //   },
+    //   onError: (error) {
+    //     logger.e('Error: $error');
+    //   },
+    //   onDone: () {
+    //     logger.i('WebSocket closed');
+    //   },
+    // );
   }
 
   @override
   void dispose() {
     super.dispose();
+    WebSocketProvider.unsubscribe(realtimeHandler);
   }
 
   void fetchGeocode(Vehicle vehicle) async {
@@ -88,8 +128,7 @@ class _VehicleViewState extends State<VehicleView> {
         final nameLower = vehicle.name?.toLowerCase() ?? '';
         final plateNoLower = vehicle.plateNo?.toLowerCase() ?? '';
         final searchLower = query.toLowerCase();
-        return nameLower.contains(searchLower) ||
-            plateNoLower.contains(searchLower);
+        return nameLower.contains(searchLower) || plateNoLower.contains(searchLower);
       }).toList();
       _groupVehicles(_filteredVehicles);
     });
@@ -103,9 +142,7 @@ class _VehicleViewState extends State<VehicleView> {
       isUtc: true,
     );
 
-    if (gpsdtUtc.year == now.year &&
-        gpsdtUtc.month == now.month &&
-        gpsdtUtc.day == now.day) {
+    if (gpsdtUtc.year == now.year && gpsdtUtc.month == now.month && gpsdtUtc.day == now.day) {
       gpsdtWIB = DateTime(now.year, now.month, now.day, 0, 0, 0);
     } else {
       gpsdtWIB = DateTime(gpsdtUtc.year, gpsdtUtc.month, gpsdtUtc.day, 0, 0, 0);
@@ -115,8 +152,8 @@ class _VehicleViewState extends State<VehicleView> {
       context,
       screen: DetailsPageView(
         vehicleId: vehicle.vehicleId!,
-        vehicleLat: vehicle.lat!,
-        vehicleLon: vehicle.lon!,
+        // vehicleLat: vehicle.lat!,
+        // vehicleLon: vehicle.lon!,
         vehicleName: vehicle.name!,
         gpsdt: gpsdtWIB.millisecondsSinceEpoch ~/ 1000,
         type: vehicle.type!,
@@ -163,8 +200,7 @@ class _VehicleViewState extends State<VehicleView> {
                   return const Center(child: CircularProgressIndicator());
                 }
                 String customerName = _groupedVehicles.keys.elementAt(index);
-                List<Vehicle> customerVehicles =
-                    _groupedVehicles[customerName]!;
+                List<Vehicle> customerVehicles = _groupedVehicles[customerName]!;
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -183,10 +219,9 @@ class _VehicleViewState extends State<VehicleView> {
                         Vehicle vehicle = entry.value;
                         DateTime? gpsdtWIB;
                         if (vehicle.gpsdt != null) {
-                          DateTime gpsdtUtc =
-                              DateTime.fromMillisecondsSinceEpoch(
-                                  vehicle.gpsdt! * 1000,
-                                  isUtc: true);
+                          DateTime gpsdtUtc = DateTime.fromMillisecondsSinceEpoch(
+                            vehicle.gpsdt! * 1000, isUtc: true
+                          );
                           gpsdtWIB = gpsdtUtc.add(const Duration(hours: 7));
                         }
 
@@ -206,8 +241,7 @@ class _VehicleViewState extends State<VehicleView> {
                                     lon: vehicle.lon!,
                                   ),
                                   withNavBar: false,
-                                  pageTransitionAnimation:
-                                      PageTransitionAnimation.fade,
+                                  pageTransitionAnimation: PageTransitionAnimation.fade,
                                 );
                               },
                             ),
@@ -232,11 +266,9 @@ class _VehicleViewState extends State<VehicleView> {
                                 });
                               },
                               child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 2.0),
+                                padding: const EdgeInsets.symmetric(horizontal: 2.0),
                                 child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Expanded(
                                       child: ListTile(
@@ -245,30 +277,25 @@ class _VehicleViewState extends State<VehicleView> {
                                           style: const TextStyle(fontSize: 12),
                                         ),
                                         subtitle: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
+                                          crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Container(
                                               decoration: BoxDecoration(
                                                 color: Colors.black,
-                                                borderRadius:
-                                                    BorderRadius.circular(4.0),
+                                                borderRadius: BorderRadius.circular(4.0),
                                               ),
                                               child: Padding(
-                                                padding:
-                                                    const EdgeInsets.all(4.0),
+                                                padding: const EdgeInsets.all(4.0),
                                                 child: Text(
                                                   vehicle.plateNo ?? '',
                                                   style: TextStyle(
-                                                    color:
-                                                        GlobalColor.textColor,
+                                                    color: GlobalColor.textColor,
                                                     fontSize: 10,
                                                   ),
                                                 ),
                                               ),
                                             ),
-                                            if (_vehicleToAddress
-                                                .containsKey(vehicle))
+                                            if (_vehicleToAddress.containsKey(vehicle))
                                               Text(
                                                 _vehicleToAddress[vehicle]!,
                                                 style: TextStyle(
@@ -283,45 +310,35 @@ class _VehicleViewState extends State<VehicleView> {
                                           children: [
                                             SizedBox(
                                               width: 60,
-                                              height:
-                                                  vehicle.type == 4 ? 25 : 56,
+                                              height: vehicle.type == 4 ? 25 : 56,
                                               child: DecoratedBox(
                                                 decoration: BoxDecoration(
                                                   color: getVehicleColor(
                                                       vehicle.speed ?? 0,
                                                       vehicle.gpsdt ?? 0),
-                                                  borderRadius:
-                                                      BorderRadius.circular(5),
+                                                  borderRadius: BorderRadius.circular(5),
                                                 ),
                                                 child: Center(
                                                   child: Column(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .center,
+                                                    mainAxisAlignment: MainAxisAlignment.center,
                                                     children: [
                                                       Text(
                                                         '${vehicle.speed ?? 0}',
                                                         style: TextStyle(
-                                                          color: GlobalColor
-                                                              .textColor,
-                                                          fontWeight:
-                                                              FontWeight.bold,
+                                                          color: GlobalColor.textColor,
+                                                          fontWeight: FontWeight.bold,
                                                           fontSize: 15,
                                                         ),
                                                       ),
                                                       if (vehicle.type != 4)
                                                         Align(
-                                                          alignment:
-                                                              Alignment.center,
+                                                          alignment: Alignment.center,
                                                           child: Text(
                                                             'kmh',
                                                             style: TextStyle(
-                                                              color: GlobalColor
-                                                                  .textColor,
+                                                              color: GlobalColor.textColor,
                                                               fontSize: 15,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
+                                                              fontWeight:FontWeight.bold,
                                                             ),
                                                           ),
                                                         ),
@@ -332,24 +349,19 @@ class _VehicleViewState extends State<VehicleView> {
                                             ),
                                             if (vehicle.type == 4)
                                               Padding(
-                                                padding: const EdgeInsets.only(
-                                                    top: 4),
+                                                padding: const EdgeInsets.only(top: 4),
                                                 child: Container(
                                                   width: 60,
                                                   decoration: BoxDecoration(
                                                     border: Border.all(
-                                                        color: Colors
-                                                            .blue.shade200),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            5),
+                                                        color: Colors.blue.shade200
+                                                        ),
+                                                    borderRadius:BorderRadius.circular(5),
                                                   ),
                                                   child: Align(
                                                     alignment: Alignment.center,
                                                     child: Padding(
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                              4.0),
+                                                      padding:const EdgeInsets.all(4.0),
                                                       child: Text(
                                                         vehicle.baseMcc != null
                                                             ? '${vehicle.baseMcc! / 10}°'
@@ -357,8 +369,7 @@ class _VehicleViewState extends State<VehicleView> {
                                                         style: const TextStyle(
                                                           color: Colors.blue,
                                                           fontSize: 12,
-                                                          fontWeight:
-                                                              FontWeight.bold,
+                                                          fontWeight: FontWeight.bold,
                                                         ),
                                                       ),
                                                     ),
@@ -371,11 +382,9 @@ class _VehicleViewState extends State<VehicleView> {
                                     ),
                                     if (gpsdtWIB != null)
                                       Padding(
-                                        padding: const EdgeInsets.only(
-                                            right: 8.0, top: 2),
+                                        padding: const EdgeInsets.only(right: 8.0, top: 2),
                                         child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.end,
+                                          crossAxisAlignment: CrossAxisAlignment.end,
                                           children: [
                                             Text(
                                               formatDateTime(gpsdtWIB),
@@ -389,40 +398,21 @@ class _VehicleViewState extends State<VehicleView> {
                                             Row(
                                               children: [
                                                 ...(vehicle.sensors
-                                                        ?.take(2)
-                                                        .map((sensor) {
+                                                        ?.take(2).map((sensor) {
                                                       return Padding(
-                                                        padding:
-                                                            const EdgeInsets
-                                                                .only(
-                                                                right: 2,
-                                                                bottom: 2),
+                                                        padding:const EdgeInsets.only(right: 2,bottom: 2),
                                                         child: Container(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .symmetric(
-                                                                  horizontal: 8,
-                                                                  vertical: 4),
-                                                          decoration:
-                                                              BoxDecoration(
-                                                            color:
-                                                                getSensorColor(
-                                                                    sensor
-                                                                        .status),
-                                                            borderRadius:
-                                                                BorderRadius
-                                                                    .circular(
-                                                                        5),
+                                                          padding: const EdgeInsets.symmetric(horizontal: 8,vertical: 4),
+                                                          decoration: BoxDecoration(
+                                                            color: getSensorColor(sensor.status),
+                                                            borderRadius: BorderRadius.circular(5),
                                                           ),
                                                           child: Text(
                                                             sensor.name ?? '',
                                                             style: TextStyle(
-                                                              color: GlobalColor
-                                                                  .textColor,
+                                                              color: GlobalColor.textColor,
                                                               fontSize: 8,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
+                                                              fontWeight: FontWeight.bold,
                                                             ),
                                                           ),
                                                         ),
@@ -431,48 +421,26 @@ class _VehicleViewState extends State<VehicleView> {
                                                     []),
                                               ],
                                             ),
-                                            if ((vehicle.sensors?.length ?? 0) >
-                                                2)
+                                            if ((vehicle.sensors?.length ?? 0) > 2)
                                               Row(
                                                 children: [
-                                                  ...(vehicle.sensors
-                                                          ?.skip(2)
-                                                          .take(2)
-                                                          .map((sensor) {
+                                                  ...(vehicle.sensors?.skip(2).take(2).map((sensor) {
                                                         return Padding(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .only(
-                                                                  right: 2,
-                                                                  top: 3,
-                                                                  bottom: 3),
+                                                          padding: const EdgeInsets.only(right: 2, top: 3, bottom: 3),
                                                           child: Container(
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .symmetric(
-                                                                    horizontal:
-                                                                        8,
-                                                                    vertical:
-                                                                        4),
-                                                            decoration:
-                                                                BoxDecoration(
+                                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                            decoration:BoxDecoration(
                                                               color: getSensorColor(
-                                                                  sensor
-                                                                      .status),
-                                                              borderRadius:
-                                                                  BorderRadius
-                                                                      .circular(
-                                                                          5),
+                                                                  sensor.status
+                                                                ),
+                                                              borderRadius: BorderRadius.circular(5),
                                                             ),
                                                             child: Text(
                                                               sensor.name ?? '',
                                                               style: TextStyle(
-                                                                color: GlobalColor
-                                                                    .textColor,
+                                                                color: GlobalColor.textColor,
                                                                 fontSize: 8,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .bold,
+                                                                fontWeight: FontWeight.bold,
                                                               ),
                                                             ),
                                                           ),

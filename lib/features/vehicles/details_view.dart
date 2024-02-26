@@ -17,8 +17,6 @@ import 'package:logger/logger.dart';
 
 class DetailsPageView extends StatefulWidget {
   final int vehicleId;
-  final double? vehicleLat;
-  final double? vehicleLon;
   final String? vehicleName;
   final int? type;
   late int gpsdt;
@@ -28,8 +26,6 @@ class DetailsPageView extends StatefulWidget {
   DetailsPageView({
     Key? key,
     required this.vehicleId,
-    required this.vehicleLat,
-    required this.vehicleLon,
     required this.vehicleName,
     required this.gpsdt,
     required this.type,
@@ -77,11 +73,12 @@ class _DetailsPageViewState extends State<DetailsPageView> {
   bool _isSpeedChartVisible = true;
   bool _isTemperatureChartVisible = true;
 
+  double? selectedLatitude;
+  double? selectedLongitude;
+
   @override
   void initState() {
     super.initState();
-    _initialCameraPosition =
-        LatLng(widget.vehicleLat ?? 0.0, widget.vehicleLon ?? 0.0);
 
     DateTime gpsdtUtc = DateTime.fromMillisecondsSinceEpoch(
       widget.gpsdt * 1000,
@@ -109,7 +106,7 @@ class _DetailsPageViewState extends State<DetailsPageView> {
         detailsItem = allData.isNotEmpty ? dataAll.jdetails : [];
       });
     } catch (e) {
-      logger.e("error : $e");
+      // logger.e("error : $e");
     }
   }
 
@@ -384,10 +381,24 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                         });
                         _selectDate(context);
                       },
-                      child: Text(
-                        '${_selectedDate.day} ${DateFormat.MMM().format(_selectedDate)}, ${_selectedDate.year}',
-                        style: GoogleFonts.poppins(
-                            fontSize: 16, color: GlobalColor.textColor),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Visibility(
+                            visible: !_isLoading,
+                            child: Text(
+                              '${_selectedDate.day} ${DateFormat.MMM().format(_selectedDate)}, ${_selectedDate.year}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                color: GlobalColor.textColor,
+                              ),
+                            ),
+                          ),
+                          Visibility(
+                            visible: _isLoading,
+                            child: const CircularProgressIndicator(),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -508,6 +519,13 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                           ? NarationWidget(
                               narationData: detailsItem,
                               fetchNarationData: () => fetchNarationData(),
+                              onMapButtonPressed: (double lat, double lon) {
+                                setState(() {
+                                  selectedLatitude = lat;
+                                  selectedLongitude = lon;
+                                  _selectedTabIndex = 0;
+                                });
+                              },
                             )
                           : _selectedTabIndex == 2
                               ? EventWidget(
@@ -605,10 +623,17 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                   ),
                   Expanded(
                     child: GoogleMap(
-                      initialCameraPosition: CameraPosition(
-                        target: _calculatePolylineCenter(),
-                        zoom: 12,
-                      ),
+                      initialCameraPosition: selectedLatitude != null &&
+                              selectedLongitude != null
+                          ? CameraPosition(
+                              target:
+                                  LatLng(selectedLatitude!, selectedLongitude!),
+                              zoom: 12,
+                            )
+                          : CameraPosition(
+                              target: _calculatePolylineCenter(),
+                              zoom: 12,
+                            ),
                       markers: _createMarkers(_sliderValue),
                       polylines: _createPolylines(),
                       onMapCreated: (controller) {
@@ -616,12 +641,13 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                           _mapController = controller;
                         });
 
-                        LatLngBounds bounds = _calculatePolylineBounds();
-                        Timer(const Duration(milliseconds: 2000), () {
+                        if (selectedLatitude == null &&
+                            selectedLongitude == null) {
+                          LatLngBounds bounds = _calculatePolylineBounds();
                           _mapController.animateCamera(
                             CameraUpdate.newLatLngBounds(bounds, 50),
                           );
-                        });
+                        }
                       },
                     ),
                   ),
@@ -637,13 +663,7 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                             end: Alignment.topRight,
                             colors: [
                               for (var dataItem in dailyData)
-                                dataItem.colorBox == 'white'
-                                    ? Colors.grey[300]!
-                                    : dataItem.colorBox == 'green'
-                                        ? Colors.green
-                                        : dataItem.colorBox == 'yellow'
-                                            ? Colors.yellow
-                                            : Colors.red,
+                                getColorByBox(dataItem.colorBox),
                             ],
                           ),
                         ),
@@ -717,7 +737,7 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                       });
                     },
                   ),
-                  Text('Show Speed Chart'),
+                  const Text('Show Speed Chart'),
                   if (widget.type == 4)
                     Checkbox(
                       value: _isTemperatureChartVisible,
@@ -727,7 +747,7 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                         });
                       },
                     ),
-                  if (widget.type == 4) Text('Show Temp Chart'),
+                  if (widget.type == 4) const Text('Show Temp Chart'),
                 ],
               ),
               if (_isSpeedChartVisible ||
@@ -743,7 +763,7 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                         title: ChartTitle(
                           text:
                               '${_isTemperatureChartVisible && widget.type == 4 ? 'Grafik Suhu' : ''}'
-                              '${_isTemperatureChartVisible && _isSpeedChartVisible ? ' dan ' : ''}'
+                              '${_isTemperatureChartVisible && _isSpeedChartVisible && widget.type == 4 ? ' dan ' : ''}'
                               '${_isSpeedChartVisible ? 'Grafik Kecepatan' : ''}'
                               ' \n ${widget.vehicleName} \n ${_selectedDate.day} ${DateFormat.MMM().format(_selectedDate)}, ${_selectedDate.year}',
                           textStyle: const TextStyle(
@@ -944,6 +964,8 @@ class _DetailsPageViewState extends State<DetailsPageView> {
       setState(() {
         widget.gpsdt = startEpoch;
         _isLoading = true;
+        selectedLatitude = null;
+        selectedLongitude = null;
       });
 
       final Data dataAll =

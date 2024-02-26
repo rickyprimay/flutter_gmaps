@@ -11,10 +11,8 @@ Color getVehicleColor(int speed, int gpsdt) {
     return Colors.grey;
   } else if (speed == 0) {
     return Colors.red;
-  } else if (speed > 0 && speed <= 60) {
-    return Colors.green;
   } else {
-    return Colors.red;
+    return Colors.green;
   }
 }
 
