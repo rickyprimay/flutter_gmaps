@@ -60,7 +60,7 @@ class _BottomBarState extends State<BottomBar> {
               ? GlobalColor.buttonColor
               : GlobalColor.textColor,
         ),
-        title: 'Kendaraan',
+        title: 'Vehicles',
         activeColorPrimary: GlobalColor.textColor,
         activeColorSecondary: GlobalColor.buttonColor,
         inactiveColorPrimary: GlobalColor.buttonColor,

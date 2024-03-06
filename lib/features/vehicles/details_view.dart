@@ -1,3 +1,4 @@
+// import 'package:VehiLoc/core/model/response_geofences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -38,11 +39,22 @@ class DetailsPageView extends StatefulWidget {
   _DetailsPageViewState createState() => _DetailsPageViewState();
 }
 
-class _DetailsPageViewState extends State<DetailsPageView> {
-  final Logger logger = Logger();
+class _DetailsPageViewState extends State<DetailsPageView>
+    with SingleTickerProviderStateMixin {
+  final Logger logger = Logger(
+    printer: PrettyPrinter(
+        methodCount: 2,
+        errorMethodCount: 8,
+        lineLength: 120,
+        colors: true,
+        printEmojis: true,
+        printTime: true),
+  );
   final ApiService apiService = ApiService();
 
   List<Marker> stopMarkers = [];
+
+  // List<Geofences> _geofencesList = [];
 
   late LatLng _initialCameraPosition;
 
@@ -53,9 +65,8 @@ class _DetailsPageViewState extends State<DetailsPageView> {
 
   late BitmapDescriptor _greenMarkerIcon;
   late BitmapDescriptor _redMarkerIcon;
-  late BitmapDescriptor _greyMarkerIcon;
 
-  bool _isButtonClicked = false;
+  int stopNumber = 0;
 
   List<Data> allData = [];
   List<DataItem> dailyData = [];
@@ -65,20 +76,24 @@ class _DetailsPageViewState extends State<DetailsPageView> {
   late GoogleMapController _mapController;
 
   int _selectedTabIndex = 0;
+  late TabController _tabController;
 
   bool exportingImage = false;
 
   bool _isLoading = false;
+  bool _isLoadingChangeStopMarker = false;
 
   bool _isSpeedChartVisible = true;
   bool _isTemperatureChartVisible = true;
 
-  double? selectedLatitude;
-  double? selectedLongitude;
+  double? stopLatitude;
+  double? stopLongitude;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(_handleTabSelection);
 
     DateTime gpsdtUtc = DateTime.fromMillisecondsSinceEpoch(
       widget.gpsdt * 1000,
@@ -89,7 +104,31 @@ class _DetailsPageViewState extends State<DetailsPageView> {
 
     setMarkerIcons();
     fetchAllData();
+    // _fetchGeofencesData();
   }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  void _handleTabSelection() {
+    setState(() {
+      _selectedTabIndex = _tabController.index;
+    });
+  }
+
+  // // void _fetchGeofencesData() async {
+  //   try {
+  //     List<Geofences> geofencesList = await apiService.fetchGeofences();
+  //     setState(() {
+  //       _geofencesList = geofencesList;
+  //     });
+  //   } catch (e) {
+  //     print("Error fetching geofences: $e");
+  //   }
+  // }
 
   void fetchAllData() async {
     final int vehicleId = widget.vehicleId;
@@ -106,29 +145,22 @@ class _DetailsPageViewState extends State<DetailsPageView> {
         detailsItem = allData.isNotEmpty ? dataAll.jdetails : [];
       });
     } catch (e) {
-      // logger.e("error : $e");
+      logger.e("error : $e");
     }
   }
 
   void setMarkerIcons() async {
-    final Uint8List greenMarkerIconData =
-        await getBytesFromAsset('assets/icons/arrow_green.png', 40);
-    final Uint8List redMarkerIconData =
-        await getBytesFromAsset('assets/icons/arrow_red.png', 40);
-    final Uint8List greyMarkerIconData =
-        await getBytesFromAsset('assets/icons/arrow_gray.png', 40);
+    final Uint8List greenMarkerIconData = await getBytesFromAsset('assets/icons/arrow_green.png', 50);
+    final Uint8List redMarkerIconData = await getBytesFromAsset('assets/icons/arrow_red.png', 50);
 
     _greenMarkerIcon = BitmapDescriptor.fromBytes(greenMarkerIconData);
     _redMarkerIcon = BitmapDescriptor.fromBytes(redMarkerIconData);
-    _greyMarkerIcon = BitmapDescriptor.fromBytes(greyMarkerIconData);
   }
 
   Future<Uint8List> getBytesFromAsset(String path, int width) async {
     ByteData data = await rootBundle.load(path);
-    ui.Codec codec = await ui.instantiateImageCodec(
-      data.buffer.asUint8List(),
-      targetWidth: width,
-    );
+    ui.Codec codec = await ui.instantiateImageCodec(data.buffer.asUint8List(),
+        targetWidth: width);
     ui.FrameInfo fi = await codec.getNextFrame();
     return (await fi.image.toByteData(format: ui.ImageByteFormat.png))!
         .buffer
@@ -136,7 +168,7 @@ class _DetailsPageViewState extends State<DetailsPageView> {
   }
 
   Set<Polyline> _createPolylines() {
-    if (dailyData.isEmpty) {
+    if (dailyData.isEmpty || !_polylineOption) {
       return Set();
     }
 
@@ -170,10 +202,8 @@ class _DetailsPageViewState extends State<DetailsPageView> {
           position: LatLng(currentDaily.latitude, currentDaily.longitude),
           rotation: currentDaily.bearing.toDouble(),
           icon: currentDaily.speed == 0
-              ? _greyMarkerIcon
-              : currentDaily.speed <= 60
-                  ? _greenMarkerIcon
-                  : _redMarkerIcon,
+              ? _redMarkerIcon
+              : _greenMarkerIcon,
           infoWindow: InfoWindow(
             title: "${widget.vehicleName}",
           ),
@@ -181,27 +211,57 @@ class _DetailsPageViewState extends State<DetailsPageView> {
       );
     }
 
-    List<JdetailsItem> stopDetails =
-        detailsItem.where((detail) => detail.type == 1).toList();
+    if (_stopMarkerOption) {
+      List<JdetailsItem> stopDetails =
+          detailsItem.where((detail) => detail.type == 1).toList();
 
-    final List<Marker> stopMarkers = stopDetails.asMap().entries.map((entry) {
-      final int index = entry.key;
-      final JdetailsItem detail = entry.value;
-      return Marker(
-        markerId: MarkerId("${detail.startdt}-${detail.enddt}"),
-        position: LatLng(detail.lat, detail.lon),
-        icon: BitmapDescriptor.defaultMarker,
-        infoWindow: InfoWindow(
-          title: "Stop ${index + 1}",
-          snippet:
-              "Jam : ${DateFormat.Hm().format(DateTime.fromMillisecondsSinceEpoch(detail.startdt * 1000))} - ${DateFormat.Hm().format(DateTime.fromMillisecondsSinceEpoch(detail.enddt * 1000))}",
-        ),
-      );
-    }).toList();
+      final List<Marker> stopMarkers = stopDetails.asMap().entries.map((entry) {
+        final int index = entry.key;
+        final JdetailsItem detail = entry.value;
+        return Marker(
+          markerId: MarkerId("${detail.startdt}-${detail.enddt}"),
+          position: LatLng(detail.lat, detail.lon),
+          icon: BitmapDescriptor.defaultMarker,
+          infoWindow: InfoWindow(
+            title: "Stop ${index + 1}",
+            snippet:
+                "${DateFormat.Hm().format(DateTime.fromMillisecondsSinceEpoch(detail.startdt * 1000))} - ${DateFormat.Hm().format(DateTime.fromMillisecondsSinceEpoch(detail.enddt * 1000))}",
+          ),
+        );
+      }).toList();
 
-    markers.addAll(stopMarkers);
+      markers.addAll(stopMarkers);
+    }
 
     return markers;
+  }
+
+  // Set<Polygon> _createGeofences() {
+  //   Set<Polygon> polygons = {};
+
+  //   for (Geofences geofence in _geofencesList) {
+  //     List<LatLng> points = geofence.geometry!
+  //         .map((geometry) => LatLng(geometry.latitude!, geometry.longitude!))
+  //         .toList();
+  //     Polygon polygon = Polygon(
+  //       polygonId: PolygonId(geofence.id.toString()),
+  //       points: points,
+  //       strokeWidth: 2,
+  //       strokeColor: Colors.orange,
+  //       fillColor: Colors.orange.withOpacity(0.2),
+  //     );
+
+  //     polygons.add(polygon);
+  //   }
+
+  //   return polygons;
+  // }
+
+  void _updateMap() {
+    setState(() {
+      if (_polylineOption) {}
+      if (_stopMarkerOption) {}
+    });
   }
 
   String _getTimeForSliderValue(double sliderValue) {
@@ -330,210 +390,284 @@ class _DetailsPageViewState extends State<DetailsPageView> {
     return zoom;
   }
 
+  bool _polylineOption = true;
+  bool _stopMarkerOption = true;
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        iconTheme: const IconThemeData(
-          color: Colors.white,
-        ),
-        title: Text(
-          "${widget.vehicleName}",
-          style: GoogleFonts.poppins(
-            textStyle: TextStyle(
-              color: GlobalColor.textColor,
-            ),
+    return DefaultTabController(
+      length: 4,
+      initialIndex: _selectedTabIndex,
+      child: Scaffold(
+        appBar: AppBar(
+          iconTheme: const IconThemeData(
+            color: Colors.white,
           ),
-        ),
-        backgroundColor: GlobalColor.mainColor,
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            SizedBox(
-              height: 50,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: IconButton(
-                      onPressed: () {
-                        setState(() {
-                          _selectedDate =
-                              _selectedDate.subtract(const Duration(days: 1));
-                          _updateStartEpoch();
-                        });
-                      },
-                      icon: const Icon(Icons.arrow_back),
-                    ),
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: _isButtonClicked
-                          ? Colors.blue[800]?.withOpacity(0.8)
-                          : Colors.blue[400]?.withOpacity(0.8),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _isButtonClicked = !_isButtonClicked;
-                        });
-                        _selectDate(context);
-                      },
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Visibility(
-                            visible: !_isLoading,
-                            child: Text(
-                              '${_selectedDate.day} ${DateFormat.MMM().format(_selectedDate)}, ${_selectedDate.year}',
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                color: GlobalColor.textColor,
-                              ),
-                            ),
-                          ),
-                          Visibility(
-                            visible: _isLoading,
-                            child: const CircularProgressIndicator(),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: IconButton(
-                      onPressed: _isForwardButtonEnabled()
-                          ? () {
-                              setState(() {
-                                _selectedDate =
-                                    _selectedDate.add(const Duration(days: 1));
-                                _updateStartEpoch();
-                              });
-                            }
-                          : null,
-                      icon: const Icon(Icons.arrow_forward),
-                    ),
-                  )
-                ],
+          title: Text(
+            "${widget.vehicleName}",
+            style: GoogleFonts.poppins(
+              textStyle: TextStyle(
+                color: GlobalColor.textColor,
               ),
             ),
-            Row(
-              children: [
-                Expanded(
-                  flex: _selectedTabIndex == 0 ? 2 : 1,
-                  child: MaterialButton(
-                    onPressed: () {
-                      setState(() {
-                        _selectedTabIndex = 0;
-                      });
+          ),
+          backgroundColor: GlobalColor.mainColor,
+          actions: _selectedTabIndex == 0
+              ? [
+                  PopupMenuButton(
+                    icon: const Icon(Icons.more_vert),
+                    itemBuilder: (BuildContext context) {
+                      return [
+                        PopupMenuItem(
+                          child: StatefulBuilder(
+                            builder: (BuildContext context, StateSetter setState) {
+                              return Row(
+                                children: [
+                                  Checkbox(
+                                    value: _polylineOption,
+                                    onChanged: (newValue) {
+                                      setState(() {
+                                        _polylineOption = newValue!;
+                                        _updateMap();
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(width: 6), 
+                                  const Text('Track line'),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                        PopupMenuItem(
+                          child: StatefulBuilder(
+                            builder: (BuildContext context, StateSetter setState) {
+                              return Row(
+                                children: [
+                                  Checkbox(
+                                    value: _stopMarkerOption,
+                                    onChanged: (newValue) {
+                                      setState(() {
+                                        _stopMarkerOption = newValue!;
+                                        _updateMap();
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Text('Stop'),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                      ];
                     },
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8.0),
-                      side: const BorderSide(color: Colors.black, width: 0.5),
-                    ),
-                    color: _selectedTabIndex == 0 ? Colors.grey[400] : null,
-                    child: Text(
-                      'Map',
-                      style: GoogleFonts.poppins(
-                        fontWeight: _selectedTabIndex == 0
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      ),
-                    ),
                   ),
-                ),
-                Expanded(
-                  flex: _selectedTabIndex == 1 ? 2 : 1,
-                  child: MaterialButton(
-                    onPressed: () {
-                      setState(() {
-                        _selectedTabIndex = 1;
-                      });
-                    },
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8.0),
-                      side: const BorderSide(color: Colors.black, width: 0.5),
-                    ),
-                    color: _selectedTabIndex == 1 ? Colors.grey[400] : null,
-                    child: Text('Narasi',
-                        style: GoogleFonts.poppins(
-                          fontWeight: _selectedTabIndex == 1
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        )),
-                  ),
-                ),
-                Expanded(
-                  flex: _selectedTabIndex == 2 ? 2 : 1,
-                  child: MaterialButton(
-                    onPressed: () {
-                      setState(() {
-                        _selectedTabIndex = 2;
-                      });
-                    },
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8.0),
-                      side: const BorderSide(color: Colors.black, width: 0.5),
-                    ),
-                    color: _selectedTabIndex == 2 ? Colors.grey[400] : null,
-                    child: Text('Event',
-                        style: GoogleFonts.poppins(
-                          fontWeight: _selectedTabIndex == 2
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        )),
-                  ),
-                ),
-                Expanded(
-                  flex: _selectedTabIndex == 3 ? 2 : 1,
-                  child: MaterialButton(
-                    onPressed: () {
-                      setState(() {
-                        _selectedTabIndex = 3;
-                      });
-                    },
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8.0),
-                      side: const BorderSide(color: Colors.black, width: 0.5),
-                    ),
-                    color: _selectedTabIndex == 3 ? Colors.grey[400] : null,
-                    child: Text('Grafik',
-                        style: GoogleFonts.poppins(
-                          fontWeight: _selectedTabIndex == 3
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        )),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(
-              height: MediaQuery.of(context).size.height * 0.71,
-              child: Builder(
-                builder: (context) {
-                  return _selectedTabIndex == 0
-                      ? _buildMapWidget()
-                      : _selectedTabIndex == 1
-                          ? NarationWidget(
-                              narationData: detailsItem,
-                              fetchNarationData: () => fetchNarationData(),
-                              onMapButtonPressed: (double lat, double lon) {
-                                setState(() {
-                                  selectedLatitude = lat;
-                                  selectedLongitude = lon;
-                                  _selectedTabIndex = 0;
-                                });
-                              },
+                ]
+              : null,
+          bottom: TabBar(
+            controller: _tabController,
+            indicatorColor: Colors.white,
+            indicatorSize: TabBarIndicatorSize.tab,
+            indicatorWeight: 5.0,
+            tabs: const [
+              Tab(
+                icon: Icon(Icons.map, color: Colors.white),
+              ),
+              Tab(
+                icon: Icon(Icons.article, color: Colors.white),
+              ),
+              Tab(
+                icon: Icon(Icons.event, color: Colors.white),
+              ),
+              Tab(
+                icon: Icon(Icons.insert_chart, color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+        body: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 5),
+              child: SizedBox(
+                  height: 50,
+                  child: Row(
+                    mainAxisAlignment: _selectedTabIndex == 0
+                        ? MainAxisAlignment.start
+                        : MainAxisAlignment.center,
+                    // mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _selectedTabIndex == 0
+                          ? SizedBox(
+                              width: 30,
+                              child: IconButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _selectedDate = _selectedDate
+                                        .subtract(const Duration(days: 1));
+                                    _updateStartEpoch();
+                                  });
+                                },
+                                icon: const Icon(Icons.arrow_back_ios_new,
+                                    size: 20),
+                              ),
                             )
-                          : _selectedTabIndex == 2
-                              ? EventWidget(
-                                  eventData: inputData,
-                                  fetchEventData: () => fetchEventData(),
-                                )
-                              : _buildChartWidget();
-                },
+                          : Expanded(
+                              child: IconButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _selectedDate = _selectedDate
+                                        .subtract(const Duration(days: 1));
+                                    _updateStartEpoch();
+                                  });
+                                },
+                                icon: const Icon(Icons.arrow_back_ios_new,
+                                    size: 20),
+                              ),
+                            ),
+                            SizedBox(width: 5,),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: GlobalColor.buttonColor.withOpacity(0.8),
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              spreadRadius: 1.5,
+                              blurRadius: 2,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: TextButton(
+                          onPressed: () {
+                            _selectDate(context);
+                          },
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Visibility(
+                                visible: !_isLoading,
+                                child: Text(
+                                  '${_selectedDate.day} ${DateFormat.MMM().format(_selectedDate)}, ${_selectedDate.year}',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: _selectedTabIndex == 0 ? 14 : 14,
+                                    color: GlobalColor.textColor,
+                                  ),
+                                ),
+                              ),
+                              Visibility(
+                                visible: _isLoading,
+                                child: const CircularProgressIndicator(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      _selectedTabIndex == 0
+                          ? SizedBox(
+                              width: 35,
+                              child: IconButton(
+                                onPressed: _isForwardButtonEnabled()
+                                    ? () {
+                                        setState(() {
+                                          _selectedDate = _selectedDate
+                                              .add(const Duration(days: 1));
+                                          _updateStartEpoch();
+                                        });
+                                      }
+                                    : null,
+                                icon: const Icon(Icons.arrow_forward_ios,
+                                    size: 20),
+                              ),
+                            )
+                          : Expanded(
+                              child: IconButton(
+                                onPressed: _isForwardButtonEnabled()
+                                    ? () {
+                                        setState(() {
+                                          _selectedDate = _selectedDate.add(const Duration(days: 1));
+                                          _updateStartEpoch();
+                                        });
+                                      }
+                                    : null,
+                                icon: const Icon(Icons.arrow_forward_ios,size: 20),
+                              ),
+                            ),
+                      if (_selectedTabIndex == 0)
+                        Row(
+                          children: [
+                            const Icon(Icons.access_time, size: 25, color: Colors.black),
+                            const SizedBox(width: 3),
+                            Text(
+                              _getTimeForSliderValue(_sliderValue),
+                              style: GoogleFonts.poppins(),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(width: 6),
+                      if (_selectedTabIndex == 0)
+                        Row(
+                          children: [
+                            const Icon(Icons.speed, size: 25, color: Colors.black),
+                            const SizedBox(width: 3),
+                            Text(
+                              '${_getSpeedForSliderValue(_sliderValue)} kmh',
+                              style: GoogleFonts.poppins(),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(width: 6),
+                      if (_selectedTabIndex == 0 && widget.type == 4)
+                        Row(
+                          children: [
+                            const Icon(Icons.thermostat, size: 25, color: Colors.black),
+                            const SizedBox(width: 0),
+                            Text(
+                              '${_getTemperatureForSliderValue(_sliderValue)}°',
+                              style: GoogleFonts.poppins(),
+                            ),
+                          ],
+                        ),
+                    ],
+                  )),
+            ),
+            Expanded(
+              child: MediaQuery.removePadding(
+                context: context,
+                removeTop: true,
+                child: TabBarView(
+                  physics: _selectedTabIndex == 0
+                      ? const NeverScrollableScrollPhysics()
+                      : null,
+                  controller: _tabController,
+                  children: [
+                    _buildMapWidget(),
+                    NarationWidget(
+                      narationData: detailsItem,
+                      fetchNarationData: () => fetchNarationData(),
+                      onMapButtonPressed: (double lat, double lon) {
+                        setState(() {
+                          stopLatitude = lat;
+                          stopLongitude = lon;
+                          _tabController.animateTo(0);
+                          _isLoadingChangeStopMarker = true;
+                        });
+                        Future.delayed(const Duration(milliseconds: 1000), () {
+                          setState(() {
+                            _isLoadingChangeStopMarker = false;
+                          });
+                        });
+                      },
+                      stopNumber: stopNumber,
+                    ),
+                    EventWidget(
+                      eventData: inputData,
+                    ),
+                    _buildChartWidget(),
+                  ],
+                ),
               ),
             ),
           ],
@@ -549,263 +683,201 @@ class _DetailsPageViewState extends State<DetailsPageView> {
   }
 
   Widget _buildMapWidget() {
-    return _isLoading
-        ? _buildLoadingDialog()
-        : dailyData.isEmpty
-            ? Center(
-                child: Container(
-                  width: double.infinity,
-                  height: double.infinity,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Colors.grey[300]!, Colors.grey[100]!],
-                    ),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'Data tidak ada',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.black,
-                      ),
-                    ),
-                  ),
-                ),
-              )
-            : Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      Column(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.access_time,
-                                size: 30, color: Colors.black),
-                            onPressed: () {},
-                          ),
-                          Text(
-                            '${_getTimeForSliderValue(_sliderValue)}',
-                            style: GoogleFonts.poppins(),
-                          ),
-                        ],
-                      ),
-                      Column(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.speed,
-                                size: 30, color: Colors.black),
-                            onPressed: () {},
-                          ),
-                          Text(
-                            '${_getSpeedForSliderValue(_sliderValue)} kmh',
-                            style: GoogleFonts.poppins(),
-                          ),
-                        ],
-                      ),
-                      if (widget.type == 4)
-                        Column(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.thermostat,
-                                  size: 30, color: Colors.black),
-                              onPressed: () {},
-                            ),
-                            Text(
-                              '${_getTemperatureForSliderValue(_sliderValue)}°',
-                              style: GoogleFonts.poppins(),
-                            ),
-                          ],
-                        ),
-                    ],
-                  ),
-                  Expanded(
-                    child: GoogleMap(
-                      initialCameraPosition: selectedLatitude != null &&
-                              selectedLongitude != null
-                          ? CameraPosition(
-                              target:
-                                  LatLng(selectedLatitude!, selectedLongitude!),
-                              zoom: 12,
-                            )
-                          : CameraPosition(
-                              target: _calculatePolylineCenter(),
-                              zoom: 12,
-                            ),
-                      markers: _createMarkers(_sliderValue),
-                      polylines: _createPolylines(),
-                      onMapCreated: (controller) {
-                        setState(() {
-                          _mapController = controller;
-                        });
+  if (_isLoadingChangeStopMarker) {
+    return _buildLoadingDialog();
+  } else if (dailyData.isEmpty || allData.isEmpty) {
+    return GoogleMap(
+      mapType: MapType.normal,
+      initialCameraPosition: const CameraPosition(
+        target: LatLng(-6.966667, 110.416664),
+        zoom: 16,
+      ),
+      markers: {},
+      polylines: {},
+      onMapCreated: (controller) {},
+    );
+  } else {
+    return Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: GoogleMap(
+                        mapType: MapType.normal,
+                        initialCameraPosition: stopLatitude != null && stopLongitude != null
+                            ? CameraPosition(
+                                target: LatLng(stopLatitude!, stopLongitude!),
+                                zoom: 14,
+                              )
+                            : CameraPosition(
+                                target: _calculatePolylineCenter(),
+                                zoom: 12,
+                              ),
+                        markers: _createMarkers(_sliderValue),
+                        polylines: _createPolylines(),
+                        onMapCreated: (controller) {
+                          setState(() {
+                            _mapController = controller;
+                          });
 
-                        if (selectedLatitude == null &&
-                            selectedLongitude == null) {
-                          LatLngBounds bounds = _calculatePolylineBounds();
-                          _mapController.animateCamera(
-                            CameraUpdate.newLatLngBounds(bounds, 50),
-                          );
-                        }
-                      },
+                          if (stopLatitude == null && stopLongitude == null) {
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              LatLngBounds bounds = _calculatePolylineBounds();
+                              _mapController.animateCamera(
+                                CameraUpdate.newLatLngBounds(bounds, 50),
+                              );
+                            });
+                          }
+                        },
+                      ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 30),
-                    child: SizedBox(
-                      height: 70,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.topRight,
-                            colors: [
-                              for (var dataItem in dailyData)
-                                getColorByBox(dataItem.colorBox),
-                            ],
-                          ),
-                        ),
-                        child: SliderTheme(
-                          data: SliderThemeData(
-                            trackHeight: 8,
-                            thumbShape: const RoundSliderThumbShape(
-                                enabledThumbRadius: 10),
-                            overlayShape: const RoundSliderOverlayShape(
-                                overlayRadius: 20),
-                            valueIndicatorShape:
-                                const PaddleSliderValueIndicatorShape(),
-                            valueIndicatorTextStyle: const TextStyle(
-                              color: Colors.black,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 30),
+                      child: SizedBox(
+                        height: 70,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.topRight,
+                              colors: [
+                                for (var dataItem in dailyData)
+                                  getColorByBox(dataItem.colorBox),
+                              ],
                             ),
-                            trackShape: CustomTrackShape(),
                           ),
-                          child: Slider(
-                            value: _sliderValue,
-                            min: 0,
-                            max: 100,
-                            onChanged: (newValue) {
-                              setState(() {
-                                _sliderValue = newValue;
-                                _updateCameraPosition(newValue);
-                              });
-                            },
-                            activeColor: Colors.black,
-                            inactiveColor: Colors.black,
+                          child: SliderTheme(
+                            data: SliderThemeData(
+                              trackHeight: 8,
+                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+                              overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
+                              valueIndicatorShape: const PaddleSliderValueIndicatorShape(),
+                              valueIndicatorTextStyle:const TextStyle(color: Colors.black),
+                              trackShape: CustomTrackShape(),
+                            ),
+                            child: Slider(
+                              value: _sliderValue,
+                              min: 0,
+                              max: 100,
+                              onChanged: (newValue) {
+                                setState(() {
+                                  _sliderValue = newValue;
+                                  _updateCameraPosition(newValue);
+                                });
+                              },
+                              activeColor: Colors.black,
+                              inactiveColor: Colors.black,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  )
-                ],
+                    )
+                  ],
+                ),
               );
   }
+}
 
   Widget _buildChartWidget() {
-    return FutureBuilder<List<DataItem>>(
-      future: fetchDataItem(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        } else if (snapshot.hasError) {
-          return const Center(
-            child: Text(
-              'Data tidak ada',
-              style: TextStyle(fontFamily: 'Poppins'),
-            ),
-          );
-        } else if (snapshot.data == null || snapshot.data!.isEmpty) {
-          return const Center(
-            child: Text(
-              'Data Suhu tidak ada',
-              style: TextStyle(fontFamily: 'Poppins'),
-            ),
-          );
-        } else {
-          List<DataItem> chartData = snapshot.data!;
-          return Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Checkbox(
-                    value: _isSpeedChartVisible,
-                    onChanged: (value) {
-                      setState(() {
-                        _isSpeedChartVisible = value!;
-                      });
-                    },
-                  ),
-                  const Text('Show Speed Chart'),
-                  if (widget.type == 4)
-                    Checkbox(
-                      value: _isTemperatureChartVisible,
-                      onChanged: (value) {
-                        setState(() {
-                          _isTemperatureChartVisible = value!;
-                        });
-                      },
-                    ),
-                  if (widget.type == 4) const Text('Show Temp Chart'),
-                ],
+    if (dailyData.isEmpty) {
+      return const Center(
+        child: Text(
+          'No Data Available',
+          style: TextStyle(fontFamily: 'Poppins'),
+        ),
+      );
+    }
+
+    double minTemperature = dailyData.map((data) => data.temp / 10).reduce((value, element) => value < element ? value : element);
+    double maxTemperature = dailyData.map((data) => data.temp / 10).reduce((value, element) => value > element ? value : element);
+    double minSpeed = dailyData.map((data) => data.speed.toDouble()).reduce((value, element) => value < element ? value : element);
+    double maxSpeed = dailyData.map((data) => data.speed.toDouble()).reduce((value, element) => value > element ? value : element);
+
+    bool isSpeedZero = minSpeed == 0 && maxSpeed == 0;
+
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+              Checkbox(
+                value: _isSpeedChartVisible,
+                onChanged: (value) {
+                  setState(() {
+                    _isSpeedChartVisible = value!;
+                  });
+                },
               ),
-              if (_isSpeedChartVisible ||
-                  (_isTemperatureChartVisible && widget.type == 4)) ...[
-                Expanded(
-                  child: SingleChildScrollView(
-                    // scrollDirection: Axis.horizontal,
+              const Text('Speed'),
+            if (widget.type == 4) ...[
+              Checkbox(
+                value: _isTemperatureChartVisible,
+                onChanged: (value) {
+                  setState(() {
+                    _isTemperatureChartVisible = value!;
+                  });
+                },
+              ),
+              const Text('Temp'),
+            ],
+          ],
+        ),
+
+        if ((_isSpeedChartVisible || (_isTemperatureChartVisible && widget.type == 4))) ...[
+          Expanded(
+            child: FutureBuilder(
+              future: Future.delayed(const Duration(seconds: 1)),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(),
+                  );
+                } else {
+                  return SingleChildScrollView(
                     child: SizedBox(
                       width: 1200,
-                      height: 600,
+                      height: 550,
                       child: SfCartesianChart(
                         key: _cartesianChartKey,
                         title: ChartTitle(
-                          text:
-                              '${_isTemperatureChartVisible && widget.type == 4 ? 'Grafik Suhu' : ''}'
-                              '${_isTemperatureChartVisible && _isSpeedChartVisible && widget.type == 4 ? ' dan ' : ''}'
-                              '${_isSpeedChartVisible ? 'Grafik Kecepatan' : ''}'
-                              ' \n ${widget.vehicleName} \n ${_selectedDate.day} ${DateFormat.MMM().format(_selectedDate)}, ${_selectedDate.year}',
+                          text: '${widget.vehicleName} \n ${_selectedDate.day} ${DateFormat.MMM().format(_selectedDate)}, ${_selectedDate.year}',
                           textStyle: const TextStyle(
                             fontFamily: 'Poppins',
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        tooltipBehavior: TooltipBehavior(enable: true),
+                        tooltipBehavior: TooltipBehavior(enable: true, format: 'point.x point.y'),
                         series: <LineSeries<DataItem, DateTime>>[
                           if (_isSpeedChartVisible)
                             LineSeries<DataItem, DateTime>(
-                              dataSource: chartData,
-                              xValueMapper: (DataItem data, _) =>
-                                  DateTime.fromMillisecondsSinceEpoch(
-                                      data.gpsdt * 1000),
-                              yValueMapper: (DataItem data, _) =>
-                                  data.speed.toDouble(),
-                              name: 'Kecepatan',
+                              dataSource: dailyData,
+                              xValueMapper: (DataItem data, _) => DateTime.fromMillisecondsSinceEpoch(data.gpsdt * 1000),
+                              yValueMapper: (DataItem data, _) => _isSpeedChartVisible ? data.speed.toDouble() : null,
+                              name: 'Speed',
                               color: Colors.orange[300],
-                              yAxisName: 'Kecepatan',
+                              yAxisName: 'Speed',
                               width: 1,
                               legendItemText: 'Speed (kmh)',
+                              animationDuration: 0,
                             ),
                           if (_isTemperatureChartVisible && widget.type == 4)
                             LineSeries<DataItem, DateTime>(
-                              dataSource: chartData,
-                              xValueMapper: (DataItem data, _) =>
-                                  DateTime.fromMillisecondsSinceEpoch(
-                                      data.gpsdt * 1000),
-                              yValueMapper: (DataItem data, _) =>
-                                  data.temp / 10,
-                              name: 'Suhu',
+                              dataSource: dailyData,
+                              xValueMapper: (DataItem data, _) => DateTime.fromMillisecondsSinceEpoch(data.gpsdt * 1000),
+                              yValueMapper: (DataItem data, _) => _isTemperatureChartVisible && widget.type == 4 ? data.temp / 10 : null,
+                              name: 'Temp',
                               color: Colors.blue[700],
-                              yAxisName: 'Suhu',
+                              yAxisName: 'Temp',
                               width: 1,
                               legendIconType: LegendIconType.horizontalLine,
                               legendItemText: 'Temp (°C)',
+                              animationDuration: 0,
                             ),
                         ],
                         primaryXAxis: DateTimeAxis(
                           title: const AxisTitle(
-                            text: 'Waktu',
+                            text: 'Time',
                             textStyle: TextStyle(
                               fontFamily: 'Poppins',
                               fontWeight: FontWeight.bold,
@@ -813,119 +885,97 @@ class _DetailsPageViewState extends State<DetailsPageView> {
                           ),
                           dateFormat: DateFormat.Hm(),
                         ),
-                        primaryYAxis: const NumericAxis(
+                        primaryYAxis: NumericAxis(
                           opposedPosition: true,
-                          name: 'Kecepatan',
-                          title: AxisTitle(
+                          name: 'Speed',
+                          title: const AxisTitle(
                             textStyle: TextStyle(
                               fontFamily: 'Poppins',
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          minimum: 0,
-                          interval: 20,
+                          minimum: _isSpeedChartVisible ? minSpeed : null,
+                          maximum: _isSpeedChartVisible ? maxSpeed + 10 : null,
+                          interval: _isSpeedChartVisible ? 20 : null,
                         ),
-                        axes: const <ChartAxis>[
-                          NumericAxis(
-                            name: 'Suhu',
-                            opposedPosition: false,
-                            title: AxisTitle(
-                              textStyle: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontWeight: FontWeight.bold,
+                        axes: <ChartAxis>[
+                          if (_isTemperatureChartVisible && widget.type == 4)
+                            NumericAxis(
+                              name: 'Temp',
+                              opposedPosition: false,
+                              title: const AxisTitle(
+                                textStyle: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
+                              minimum: _isTemperatureChartVisible ? minTemperature - 5 : null,
+                              maximum: _isTemperatureChartVisible ? maxTemperature + 5 : null,
+                              interval: _isTemperatureChartVisible ? 10 : null,
                             ),
-                            minimum: 0,
-                            interval: 10,
-                          ),
                         ],
                         legend: const Legend(
                           isVisible: true,
                           textStyle: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15),
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15),
                         ),
                       ),
                     ),
-                  ),
-                ),
-              ],
-              ElevatedButton(
-                onPressed: () {
-                  _renderChartAsImage(context);
-                },
-                style: ButtonStyle(
-                  backgroundColor:
-                      MaterialStateProperty.all<Color>(Colors.grey),
-                ),
-                child: Text(
-                  'Export as image',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: GlobalColor.textColor,
-                  ),
+                  );
+                }
+              },
+            ),
+          ),
+          if (_isSpeedChartVisible || (_isTemperatureChartVisible && widget.type == 4))
+            ElevatedButton(
+              onPressed: () {
+                _renderChartAsImage(context);
+              },
+              style: ButtonStyle(
+                backgroundColor: MaterialStateProperty.all<Color>(Colors.black.withOpacity(0.8)),
+              ),
+              child: Text(
+                'Save image',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: GlobalColor.textColor,
                 ),
               ),
-            ],
-          );
-        }
-      },
+            ),
+        ],
+      ],
     );
   }
 
-  Future<void> _renderChartAsImage(BuildContext context) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return const AlertDialog(
-          title: Text('Processing'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Mohon tunggu...'),
-            ],
-          ),
-        );
-      },
-    );
 
-    final ui.Image? data =
-        await _cartesianChartKey.currentState!.toImage(pixelRatio: 3.0);
+  Future<void> _renderChartAsImage(BuildContext context) async {
+    final ui.Image? data = await _cartesianChartKey.currentState!.toImage(pixelRatio: 3.0);
 
     final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder,
-        Rect.fromPoints(const Offset(0.0, 0.0), const Offset(1220.0, 1720.0)));
+    final canvas = Canvas(recorder,Rect.fromPoints(const Offset(0.0, 0.0), const Offset(1220.0, 1720.0)));
     canvas.drawColor(GlobalColor.textColor, BlendMode.dstOver);
     canvas.drawImage(data!, Offset.zero, Paint());
-    final ui.Image finalImage =
-        await recorder.endRecording().toImage(1220, 1720);
+    final ui.Image finalImage = await recorder.endRecording().toImage(1220, 1720);
 
-    final ByteData? bytes =
-        await finalImage.toByteData(format: ui.ImageByteFormat.png);
-    final Uint8List imageBytes =
-        bytes!.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes);
+    final ByteData? bytes = await finalImage.toByteData(format: ui.ImageByteFormat.png);
+    final Uint8List imageBytes = bytes!.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes);
 
     final result = await ImageGallerySaver.saveImage(imageBytes);
 
-    Navigator.of(context).pop();
-
-    // ignore: use_build_context_synchronously
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           title: result['isSuccess']
-              ? const Text('Foto Tersimpan')
-              : const Text('Gagal untuk menyimpan foto'),
+              ? const Text('Image saved')
+              : const Text('Failed to saved image'),
           content: result['isSuccess']
-              ? const Text('Foto telah tersimpan di galeri anda.')
-              : const Text('Gagal untuk menyimpan foto ke galeri anda'),
+              ? const Text('Image is saved on your galery.')
+              : const Text('Failed to saved image on your galery'),
           actions: <Widget>[
             TextButton(
               onPressed: () {
@@ -964,19 +1014,18 @@ class _DetailsPageViewState extends State<DetailsPageView> {
       setState(() {
         widget.gpsdt = startEpoch;
         _isLoading = true;
-        selectedLatitude = null;
-        selectedLongitude = null;
+        stopLatitude = null;
+        stopLongitude = null;
       });
 
-      final Data dataAll =
-          await apiService.fetchDailyHistory(vehicleId, startEpoch);
+      final Data dataAll = await apiService.fetchDailyHistory(vehicleId, startEpoch);
 
       setState(() {
         allData = [dataAll];
         dailyData = allData.isNotEmpty ? allData[0].data : [];
         inputData = allData.isNotEmpty ? dataAll.inputlogs : [];
 
-        if (_selectedTabIndex == 0 && dailyData.isNotEmpty) {
+        if (dailyData.isNotEmpty) {
           final DataItem currentDaily = dailyData.first;
           _initialCameraPosition =
               LatLng(currentDaily.latitude, currentDaily.longitude);
@@ -986,26 +1035,40 @@ class _DetailsPageViewState extends State<DetailsPageView> {
           // );
         }
 
+        if (_selectedTabIndex == 0) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            LatLngBounds bounds = _calculatePolylineBounds();
+            _mapController.animateCamera(
+              CameraUpdate.newLatLngBounds(bounds, 50),
+            );
+          });
+        }
+
         detailsItem = allData.isNotEmpty ? dataAll.jdetails : [];
-        final List<Marker> updatedStopMarkers =
-            detailsItem.where((detail) => detail.type == 1).map((detail) {
+        final List<Marker> updatedStopMarkers = detailsItem.where((detail) => detail.type == 1).map((detail) {
           return Marker(
             markerId: MarkerId("${detail.startdt}-${detail.enddt}"),
             position: LatLng(detail.lat, detail.lon),
             icon: BitmapDescriptor.defaultMarker,
             infoWindow: InfoWindow(
               title: "Berhenti",
-              snippet:
-                  "Jam: ${DateFormat.Hm().format(DateTime.fromMillisecondsSinceEpoch(detail.startdt * 1000))}",
+              snippet: DateFormat.Hm().format(DateTime.fromMillisecondsSinceEpoch(detail.startdt * 1000)),
             ),
           );
         }).toList();
 
         stopMarkers.clear();
         stopMarkers.addAll(updatedStopMarkers);
+
+        stopNumber = 0;
       });
     } catch (e) {
-      logger.e("error : $e");
+      logger.e("error haha : $e");
+      setState(() {
+        allData = [];
+        dailyData = [];
+        detailsItem = [];
+      });
     } finally {
       setState(() {
         _isLoading = false;
@@ -1026,13 +1089,25 @@ class _DetailsPageViewState extends State<DetailsPageView> {
         ).add(const Duration(days: 1));
         return date.isBefore(lastSelectableDate);
       },
+      builder: (BuildContext context, Widget? child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            colorScheme: ColorScheme.light(
+              primary: GlobalColor.mainColor,
+              onPrimary: Colors.white,
+            ),
+            textTheme:
+                GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null && picked != _selectedDate) {
       DateTime gpsdtUtc = DateTime.fromMillisecondsSinceEpoch(
         widget.initialGpsdt * 1000,
         isUtc: true,
       );
-      DateTime gpsdtWIB = gpsdtUtc.add(const Duration(hours: 7));
       DateTime pickedWIB = picked.add(const Duration(hours: 7));
       if (pickedWIB !=
           DateTime(pickedWIB.year, pickedWIB.month, pickedWIB.day)) {
@@ -1069,25 +1144,9 @@ class _DetailsPageViewState extends State<DetailsPageView> {
     final int startEpoch = widget.gpsdt;
 
     try {
-      final Data dataAll =
-          await apiService.fetchDailyHistory(vehicleId, startEpoch);
+      final Data dataAll = await apiService.fetchDailyHistory(vehicleId, startEpoch);
 
       return dataAll.jdetails;
-    } catch (e) {
-      logger.e("error : $e");
-      rethrow;
-    }
-  }
-
-  Future<List<DataItem>> fetchDataItem() async {
-    final int vehicleId = widget.vehicleId;
-    final int startEpoch = widget.gpsdt;
-
-    try {
-      final Data dataAll =
-          await apiService.fetchDailyHistory(vehicleId, startEpoch);
-
-      return dataAll.data;
     } catch (e) {
       logger.e("error : $e");
       rethrow;

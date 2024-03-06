@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:persistent_bottom_nav_bar/persistent_tab_view.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,13 +7,17 @@ import 'package:VehiLoc/core/utils/colors.dart';
 import 'package:VehiLoc/features/auth/widget/form_login.dart';
 import 'package:VehiLoc/features/map/widget/bottom_bar.dart';
 import 'package:logger/logger.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class LoginView extends StatefulWidget {
-  const LoginView({Key? key}) : super(key: key);
+  final TextEditingController? usernameController; 
+
+  const LoginView({Key? key, this.usernameController}) : super(key: key);
 
   @override
   _LoginViewState createState() => _LoginViewState();
 }
+
 
 class LoginState {
   static String userSalt = "";
@@ -25,12 +28,21 @@ class _LoginViewState extends State<LoginView> {
   final TextEditingController _passwordController = TextEditingController();
 
   bool isLoading = false;
-  final Logger logger = Logger();
+  final Logger logger = Logger(
+    printer: PrettyPrinter(
+        methodCount: 2,
+        errorMethodCount: 8,
+        lineLength: 120,
+        colors: true,
+        printEmojis: true,
+        printTime: true),
+  );
 
   @override
   void initState() {
     super.initState();
     _checkTokenAndRedirect();
+    _usernameController.text = widget.usernameController?.text ?? '';
   }
 
   Future<void> _checkTokenAndRedirect() async {
@@ -38,13 +50,14 @@ class _LoginViewState extends State<LoginView> {
     String? token = prefs.getString('token');
 
     if (token != null && token.isNotEmpty) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => BottomBar()),
-      );
+      Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => BottomBar()),
+            (Route<dynamic> route) => false,
+        );
       LoginState.userSalt = prefs.getString("customerSalts")!;
     } else {
       _fetchAndCacheCustomerSalts();
+      _requestLocationPermission();
     }
   }
 
@@ -59,6 +72,7 @@ class _LoginViewState extends State<LoginView> {
           'Basic ' + base64Encode(utf8.encode('$username:$password'));
 
       try {
+        // logger.i("test : ${basicAuth} ${Uri.parse(apiUrl)}");
         final http.Response response = await http.get(
           Uri.parse(apiUrl),
           headers: {'Authorization': basicAuth},
@@ -77,6 +91,14 @@ class _LoginViewState extends State<LoginView> {
       }
     }
   }
+
+  Future<void> _requestLocationPermission() async {
+    PermissionStatus status = await Permission.location.request();
+    if (!status.isGranted) {
+      logger.e("permission success");
+    }
+  }
+
 
   Future<void> _login() async {
     setState(() {
@@ -99,6 +121,7 @@ class _LoginViewState extends State<LoginView> {
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
+        logger.i(response.body);
         final String token = data['token'];
 
         SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -106,18 +129,18 @@ class _LoginViewState extends State<LoginView> {
         prefs.setString('username', username);
         prefs.setString('password', password);
 
-        _fetchAndCacheCustomerSalts();
+        await _fetchAndCacheCustomerSalts();
+        await _requestLocationPermission();
 
-        PersistentNavBarNavigator.pushDynamicScreen(
-          context,
-          screen: MaterialPageRoute(builder: (context) => BottomBar()),
-          withNavBar: false,
+        Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => BottomBar()),
+            (Route<dynamic> route) => false,
         );
       } else {
         logger.e('Failed to login. Status code: ${response.statusCode}');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Password atau Email salah. Silakan coba lagi.'),
+            content: Text('Invalid Username or Password.'),
             duration: Duration(seconds: 3),
           ),
         );
@@ -142,34 +165,24 @@ class _LoginViewState extends State<LoginView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(
-                  height: 20,
+                Center(
+                  child: Image.asset(
+                    'assets/logo/vehiloc-logo-text.png',
+                    width: 200,
+                    height: 200,
+                  )
                 ),
-                Container(
-                  alignment: Alignment.center,
-                  child: Text(
-                    'VehiLoc',
-                    style: GoogleFonts.poppins(
-                      color: GlobalColor.mainColor,
-                      fontSize: 35,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const SizedBox(
-                  height: 50,
-                ),
-                Text(
-                  'Login ke akun anda',
-                  style: GoogleFonts.poppins(
-                    color: GlobalColor.mainColor,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(
-                  height: 30,
-                ),
+                // Center(
+                //   child: 
+                //     Text(
+                //       'VehiLoc',
+                //       style: GoogleFonts.poppins(
+                //         color: GlobalColor.mainColor,
+                //         fontSize: 35,
+                //         fontWeight: FontWeight.bold,
+                //       ),
+                //     ),
+                // ),
                 TextFormLogin(
                   controller: _usernameController,
                   text: 'Username',
@@ -192,17 +205,13 @@ class _LoginViewState extends State<LoginView> {
                   child: ElevatedButton(
                     onPressed: isLoading ? null : _login,
                     style: ButtonStyle(
-                      minimumSize: MaterialStateProperty.all(Size(
-                        MediaQuery.of(context).size.width * 1.0,
-                        50,
-                      )),
+                      minimumSize: MaterialStateProperty.all(
+                          Size(MediaQuery.of(context).size.width * 1.0, 50)),
                       backgroundColor:
                           MaterialStateProperty.all(GlobalColor.mainColor),
-                      shape: MaterialStateProperty.all(
-                        RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                      ),
+                      shape: MaterialStateProperty.all(RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      )),
                       elevation: MaterialStateProperty.all(10),
                     ),
                     child: isLoading
@@ -226,7 +235,7 @@ class _LoginViewState extends State<LoginView> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Versi: 0.1.0',
+                        'Version: 2.0.0',
                         style: GoogleFonts.poppins(
                           color: GlobalColor.mainColor,
                           fontSize: 16,

@@ -2,16 +2,17 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:VehiLoc/core/Api/websocket.dart';
-import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:VehiLoc/core/model/response_vehicles.dart';
 import 'package:VehiLoc/core/utils/colors.dart';
+import 'package:VehiLoc/core/utils/vehicle_func.dart';
 import 'dart:math';
 import 'package:VehiLoc/core/model/response_geofences.dart';
 import 'package:VehiLoc/core/Api/api_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:logger/logger.dart';
 
 class MapScreen extends StatefulWidget {
@@ -25,7 +26,15 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  final Logger logger = Logger();
+  final Logger logger = Logger(
+    printer: PrettyPrinter(
+        methodCount: 2,
+        errorMethodCount: 8,
+        lineLength: 120,
+        colors: true,
+        printEmojis: true,
+        printTime: true),
+  );
   late BitmapDescriptor greenMarkerIcon;
   late BitmapDescriptor redMarkerIcon;
   late BitmapDescriptor greyMarkerIcon;
@@ -33,8 +42,10 @@ class _MapScreenState extends State<MapScreen> {
   late Future<List<Geofences>> _fetchGeofences;
   late Future<List<Vehicle>> _fetchDataAndGeofences;
   late List<Vehicle> _allVehicles;
-  bool switchValue = true;
+  bool switchGeofences = true;
+  bool switchCurrentLocation = false;
   bool geofencesEnabled = true;
+  late GoogleMapController _googleMapController;
 
   @override
   void initState() {
@@ -51,7 +62,7 @@ class _MapScreenState extends State<MapScreen> {
       if (current.vehicleId == vehicle.vehicleId) {
         setState(() {
           current.merge(vehicle);
-          // logger.i('WebSocket message map: ${current.customerName} ${current.plateNo}');
+          // logger.i('WebSocket message map: ${current.customerName} ${current.name}');
         });
         break;
       }
@@ -124,14 +135,32 @@ class _MapScreenState extends State<MapScreen> {
     return polygons;
   }
 
-  void _refreshPage() {
-    setState(() {
-      _fetchGeofences = fetchGeofencesData();
-      _fetchDataAndGeofences = fetchAllData();
-      widget.lat = null;
-      widget.lon = null;
-    });
-  }
+  final regexPlateNo = RegExp(r'\w* \d\d\d\d \w*');
+  // logger.i("HAHAHAHA ${vehicle.name} = ${regexPlateNo.firstMatch(vehicle.name!)!.group(0)}");
+
+  void _zoomOutMap() {
+  _resetCameraPosition();
+  widget.lat = null;
+  widget.lon = null;
+}
+
+void _resetCameraPosition() {
+  LatLngBounds bounds;
+    bounds = _getBounds(_allVehicles);
+  
+  _googleMapController.animateCamera(CameraUpdate.newLatLngBounds(bounds, 20));
+}
+
+
+
+  // Future<void> _checkLocationPermission() async {
+  //   PermissionStatus status = await Permission.location.status;
+  //   if (status.isDenied) {
+  //     PermissionStatus permissionStatus = await Permission.location.request();
+  //     if (permissionStatus.isGranted) {
+  //     }
+  //   }
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -152,25 +181,52 @@ class _MapScreenState extends State<MapScreen> {
                 return Container();
               } else if (snapshot.hasData && snapshot.data!.isNotEmpty) {
                 return Switch(
-                  value: switchValue,
+                  value: switchGeofences,
                   onChanged: (newValue) {
                     setState(() {
-                      switchValue = newValue;
+                      switchGeofences = newValue;
                       geofencesEnabled = newValue;
+                      final snackBarMessage = SnackBar(
+                        content: Text(newValue ? 'Showing Geofences' : 'Hiding Geofences'),
+                        duration: const Duration(seconds: 2),
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(snackBarMessage);
                     });
                   },
-                  activeColor: Colors.white,
-                  inactiveThumbColor: Colors.white,
+                  activeColor: GlobalColor.textColor,
+                  inactiveThumbColor: Colors.grey,
                 );
               } else {
                 return Container();
               }
             },
           ),
-          IconButton(
-            icon: Icon(Icons.refresh, color: GlobalColor.textColor),
-            onPressed: _refreshPage,
+          TextButton(
+            onPressed: _zoomOutMap,
+            child: Text(
+              '[   ]',
+              style: TextStyle(
+                color: GlobalColor.textColor,
+                fontSize: 24.0,
+              ),
+            ),
           ),
+
+          // IconButton(
+          //   icon: Icon(Icons.more_vert, color: GlobalColor.textColor),
+          //   onPressed: _zoomOutMap,
+          // )
+          // Switch(
+          //   value: switchCurrentLocation,
+          //   onChanged: (newValue) {
+          //     setState(() {
+          //       switchCurrentLocation = newValue;
+          //       logger.w("huehue test");
+
+          //       _checkLocationPermission();
+          //     });
+          //   }
+          // )
         ],
       ),
       body: FutureBuilder<List<Vehicle>>(
@@ -179,9 +235,7 @@ class _MapScreenState extends State<MapScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('No data available'));
+            return Center(child: Text('No data avalaible : ${snapshot.error}'));
           } else {
             _allVehicles = snapshot.data!;
             LatLngBounds bounds = _getBounds(_allVehicles);
@@ -248,7 +302,7 @@ class _MapScreenState extends State<MapScreen> {
                           icon: markerIcon,
                           infoWindow: InfoWindow(
                             title: ("${vehicle.name}"),
-                            snippet: ("${vehicle.plateNo}, ${vehicle.speed} kmh, ${_formatDateTime(gpsdtWIB!)} "),
+                            snippet: ("${regexPlateNo.hasMatch(vehicle.name!)?"":vehicle.plateNo} ${vehicle.speed} kmh ${formatDateTime(gpsdtWIB!)} ${vehicle.baseMcc! ~/ 10}°C"),
                           ),
                           rotation: vehicle.bearing?.toDouble() ?? 0.0,
                         );
@@ -258,6 +312,7 @@ class _MapScreenState extends State<MapScreen> {
                     compassEnabled: true,
                     zoomControlsEnabled: false,
                     onMapCreated: (GoogleMapController controller) {
+                      _googleMapController = controller;
                       if (!(widget.lat != null && widget.lon != null)) {
                         Future.delayed(const Duration(milliseconds: 1000), () {
                           controller.animateCamera(
@@ -266,6 +321,7 @@ class _MapScreenState extends State<MapScreen> {
                         });
                       }
                     },
+
                   );
                 } else {
                   List<Geofences> geofences = geofenceSnapshot.data!;
@@ -307,7 +363,7 @@ class _MapScreenState extends State<MapScreen> {
                           icon: markerIcon,
                           infoWindow: InfoWindow(
                             title: ("${vehicle.name}"),
-                            snippet: ("${vehicle.plateNo}, ${vehicle.speed} kmh, ${_formatDateTime(gpsdtWIB!)} "),
+                            snippet: ("${regexPlateNo.hasMatch(vehicle.name!)?"":vehicle.plateNo} ${vehicle.speed} kmh ${formatDateTime(gpsdtWIB!)} "),
                           ),
                           rotation: vehicle.bearing?.toDouble() ?? 0.0,
                         );
@@ -318,6 +374,7 @@ class _MapScreenState extends State<MapScreen> {
                     compassEnabled: true,
                     zoomControlsEnabled: false,
                     onMapCreated: (GoogleMapController controller) {
+                      _googleMapController = controller;
                       if (!(widget.lat != null && widget.lon != null)) {
                         Future.delayed(const Duration(milliseconds: 1000), () {
                           controller.animateCamera(
@@ -367,19 +424,5 @@ class _MapScreenState extends State<MapScreen> {
     double angle = maxLat - minLat;
     double zoom = log(180.0 / angle) / ln2;
     return zoom - log(padding / 180) / ln2;
-  }
-}
-
-String _formatDateTime(DateTime dateTime) {
-  final now = DateTime.now();
-
-  if (dateTime.year == now.year &&
-      dateTime.month == now.month &&
-      dateTime.day == now.day) {
-    return DateFormat.Hm().format(dateTime);
-  } else if (dateTime.year == now.year) {
-    return DateFormat('dd-MMM').format(dateTime);
-  } else {
-    return DateFormat.y().format(dateTime);
   }
 }

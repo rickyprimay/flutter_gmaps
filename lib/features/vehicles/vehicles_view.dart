@@ -20,7 +20,16 @@ class VehicleView extends StatefulWidget {
 }
 
 class _VehicleViewState extends State<VehicleView> {
-  final Logger logger = Logger();
+  final Logger logger = Logger(
+    printer: PrettyPrinter(
+        methodCount: 2,
+        errorMethodCount: 8, 
+        lineLength: 120,
+        colors: true, 
+        printEmojis: true,
+        printTime: true
+        ),
+  );
   final ApiService apiService = ApiService();
   late List<Vehicle> _allVehicles;
   late List<Vehicle> _filteredVehicles;
@@ -33,7 +42,7 @@ class _VehicleViewState extends State<VehicleView> {
       if (current.vehicleId == vehicle.vehicleId) {
         setState(() {
           current.merge(vehicle);
-          // logger.i('WebSocket message vehicle: ${current.customerName} ${current.plateNo}');
+          // logger.i('WebSocket message vehicle: ${current.customerName} ${current.name}');
         });
         break;
       }
@@ -75,12 +84,6 @@ class _VehicleViewState extends State<VehicleView> {
     // );
   }
 
-  @override
-  void dispose() {
-    super.dispose();
-    WebSocketProvider.unsubscribe(realtimeHandler);
-  }
-
   void fetchGeocode(Vehicle vehicle) async {
     if (vehicle.lat != null && vehicle.lon != null) {
       final double? lat = vehicle.lat;
@@ -110,6 +113,7 @@ class _VehicleViewState extends State<VehicleView> {
         _isLoading = false;
       });
     }
+    WebSocketProvider.subscribe(realtimeHandler);
   }
 
   void _groupVehicles(List<Vehicle> vehicles) {
@@ -219,9 +223,7 @@ class _VehicleViewState extends State<VehicleView> {
                         Vehicle vehicle = entry.value;
                         DateTime? gpsdtWIB;
                         if (vehicle.gpsdt != null) {
-                          DateTime gpsdtUtc = DateTime.fromMillisecondsSinceEpoch(
-                            vehicle.gpsdt! * 1000, isUtc: true
-                          );
+                          DateTime gpsdtUtc = DateTime.fromMillisecondsSinceEpoch(vehicle.gpsdt! * 1000, isUtc: true);
                           gpsdtWIB = gpsdtUtc.add(const Duration(hours: 7));
                         }
 
@@ -299,8 +301,7 @@ class _VehicleViewState extends State<VehicleView> {
                                               Text(
                                                 _vehicleToAddress[vehicle]!,
                                                 style: TextStyle(
-                                                  color:
-                                                      GlobalColor.buttonColor,
+                                                  color: GlobalColor.buttonColor,
                                                   fontSize: 12,
                                                 ),
                                               ),
@@ -313,9 +314,7 @@ class _VehicleViewState extends State<VehicleView> {
                                               height: vehicle.type == 4 ? 25 : 56,
                                               child: DecoratedBox(
                                                 decoration: BoxDecoration(
-                                                  color: getVehicleColor(
-                                                      vehicle.speed ?? 0,
-                                                      vehicle.gpsdt ?? 0),
+                                                  color: getVehicleColor(vehicle.speed ?? 0, vehicle.gpsdt ?? 0),
                                                   borderRadius: BorderRadius.circular(5),
                                                 ),
                                                 child: Center(
@@ -353,9 +352,7 @@ class _VehicleViewState extends State<VehicleView> {
                                                 child: Container(
                                                   width: 60,
                                                   decoration: BoxDecoration(
-                                                    border: Border.all(
-                                                        color: Colors.blue.shade200
-                                                        ),
+                                                    border: Border.all(color: Colors.blue.shade200),
                                                     borderRadius:BorderRadius.circular(5),
                                                   ),
                                                   child: Align(
@@ -397,8 +394,7 @@ class _VehicleViewState extends State<VehicleView> {
                                             const SizedBox(height: 3),
                                             Row(
                                               children: [
-                                                ...(vehicle.sensors
-                                                        ?.take(2).map((sensor) {
+                                                ...(vehicle.sensors?.take(2).map((sensor) {
                                                       return Padding(
                                                         padding:const EdgeInsets.only(right: 2,bottom: 2),
                                                         child: Container(
@@ -430,9 +426,7 @@ class _VehicleViewState extends State<VehicleView> {
                                                           child: Container(
                                                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                             decoration:BoxDecoration(
-                                                              color: getSensorColor(
-                                                                  sensor.status
-                                                                ),
+                                                              color: getSensorColor(sensor.status),
                                                               borderRadius: BorderRadius.circular(5),
                                                             ),
                                                             child: Text(
